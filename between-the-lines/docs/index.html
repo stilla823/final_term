@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Between the Lines: Design Spec v1</title>
+<meta name="description" content="Design Spec for Between the Lines, a small AI storyboard planner that turns a short dialogue scene into three shots.">
+<style>
+:root{
+  --paper:#F3F4F6;
+  --sheet:#FFFFFF;
+  --ink:#18212C;
+  --ink2:#46515F;
+  --line:#CBD2DA;
+  --wall:#E4E8EC;
+  --blue:#27508A;
+  --pencil:#A9CBEA;
+  --red:#C0392B;
+  --mark:#FFE98A;
+  --radius:4px;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Noto Serif KR","Nanum Myeongjo",Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic","Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"D2Coding","Noto Sans Mono CJK KR",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans)}
+[lang="ko"]{word-break:keep-all;overflow-wrap:break-word}
+a{color:var(--blue)}
+a:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--ink);color:#fff;padding:8px 12px;z-index:10}
+.skip:focus{left:8px}
+
+.shell{display:grid;grid-template-columns:190px minmax(0,1fr);gap:56px;max-width:1220px;margin:0 auto;padding:0 28px}
+.toc{position:sticky;top:0;align-self:start;padding:40px 0}
+.toc p{margin:0 0 10px;font-weight:700;font-size:.9rem;color:var(--ink2)}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:t}
+.toc li{counter-increment:t;margin:0}
+.toc a{display:block;padding:5px 0;color:var(--ink);text-decoration:none;font-size:.95rem;border-bottom:1px solid transparent}
+.toc li:not(.extra) a::before{content:counter(t) "  ";color:var(--blue);font-weight:700;display:inline-block;width:1.6em}
+.toc li.extra{counter-increment:none}
+.toc li.extra a{padding-left:1.6em}
+.toc a:hover{border-bottom-color:var(--blue)}
+
+main{min-width:0;padding-bottom:72px}
+
+/* hero */
+.hero{padding:56px 0 48px}
+.hero h1{font:700 clamp(2.6rem,6vw,4.6rem)/1.02 var(--serif);margin:0 0 18px;letter-spacing:-.02em}
+.hero .lede{font-size:1.25rem;line-height:1.5;max-width:34em;margin:0 0 20px;color:var(--ink)}
+.hero .meta{margin:0 0 36px;color:var(--ink2);font-size:.95rem}
+.hero .meta span{display:block}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.strip figure{margin:0}
+.strip figcaption{margin-top:10px;font-size:.92rem;line-height:1.45}
+.strip figcaption b{display:block;font-family:var(--serif);font-size:1.02rem}
+.strip figcaption span{color:var(--ink2)}
+.frame{display:block;width:100%;aspect-ratio:16/9;background:var(--wall);border:2px solid var(--ink)}
+.strip-note{margin:12px 0 0;font-size:.88rem;color:var(--ink2)}
+
+/* sections */
+section{padding:60px 0 8px;border-top:1px solid var(--line)}
+section.first{border-top:2px solid var(--ink)}
+h2{display:flex;align-items:baseline;gap:16px;margin:0 0 22px;font:700 clamp(1.6rem,3vw,2.1rem)/1.15 var(--serif);letter-spacing:-.01em}
+h2 .n{flex:none;font-size:1rem;color:var(--blue);border:1.5px solid var(--blue);border-radius:var(--radius);min-width:2em;text-align:center;padding:1px 6px;font-family:var(--sans)}
+h3{margin:36px 0 10px;font:700 1.2rem/1.3 var(--serif)}
+p{margin:0 0 16px;max-width:68ch}
+ul,ol{max-width:68ch;padding-left:1.3em;margin:0 0 16px}
+li{margin-bottom:6px}
+.lead{font-size:1.12rem;max-width:62ch}
+.small{font-size:.9rem;color:var(--ink2)}
+.fill{background:var(--mark);padding:0 4px;border-radius:2px}
+code{font-family:var(--mono);font-size:.88em;background:#E9ECF0;padding:1px 5px;border-radius:3px}
+pre{font-family:var(--mono);font-size:.84rem;line-height:1.55;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;overflow-x:auto;margin:0 0 18px;max-width:100%}
+pre code{background:none;padding:0;font-size:inherit}
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:20px}
+.scroll{overflow-x:auto;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--line);font-size:.93rem;line-height:1.5}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{background:#ECEFF2;font-weight:700;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:600}
+
+/* sample input */
+.inputsheet{display:grid;grid-template-columns:max-content 1fr;gap:10px 18px;margin:0}
+.inputsheet dt{font-weight:600;color:var(--ink2);font-size:.9rem}
+.inputsheet dd{margin:0}
+.paper-text{font-family:var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:10px 12px;white-space:pre-wrap;display:block}
+.badge{display:inline-block;border:1.5px solid var(--blue);color:var(--blue);border-radius:var(--radius);padding:2px 10px;font-size:.88rem;font-weight:600}
+.resulthead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:30px 0 14px}
+.resulthead h3{margin:0}
+
+/* shot cards */
+.shot{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:26px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:18px}
+.shot .tag{margin:12px 0 0;font-size:.85rem;color:var(--ink2)}
+.shot h4{margin:0 0 12px;font:700 1.15rem/1.3 var(--serif)}
+.shot h4 span{color:var(--blue);margin-right:8px}
+.shot dl{margin:0;display:grid;grid-template-columns:7.2em minmax(0,1fr);gap:9px 16px}
+.shot dt{font-size:.86rem;font-weight:700;color:var(--ink2);padding-top:2px}
+.shot dd{margin:0}
+.say{border-left:3px solid var(--blue);padding-left:10px}
+.silent{color:var(--ink2);font-style:italic}
+.suggest{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.suggest .sheet{margin:0;border-top:3px solid var(--red)}
+.suggest h4{margin:0 0 4px;font:700 1.05rem/1.3 var(--serif)}
+.suggest .kind{font-size:.85rem;color:var(--ink2);margin:0 0 10px}
+.suggest dl{margin:0}
+.suggest dt{font-size:.86rem;font-weight:700;color:var(--ink2);margin-top:10px}
+.suggest dd{margin:0}
+
+/* wireframe */
+.wire{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:18px}
+.w-top{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1.5px solid #7C8794;padding:8px 12px;margin-bottom:16px;position:relative}
+.w-top b{font-family:var(--serif)}
+.w-cols{display:grid;grid-template-columns:5fr 7fr;gap:16px}
+.w-col{border:1.5px dashed #8E9AA8;padding:14px}
+.w-h{font:700 1rem var(--serif);margin:0 0 12px}
+.w-box{border:1.5px solid #7C8794;background:var(--paper);min-height:36px;padding:6px 10px;font-size:.85rem;color:var(--ink2);margin-bottom:14px;position:relative}
+.w-box.tall{min-height:84px}
+.w-lab{font-size:.78rem;color:var(--ink2);margin:0 0 3px;font-weight:600}
+.w-seg{display:inline-flex}
+.w-seg span{border:1.5px solid #7C8794;padding:2px 16px;font-size:.85rem;background:var(--paper)}
+.w-seg span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.w-btns{display:flex;flex-wrap:wrap;gap:10px}
+.w-btn{border:1.5px solid var(--ink);padding:6px 12px;font-size:.85rem;font-weight:600;position:relative;background:#fff}
+.w-btn.main{background:var(--ink);color:#fff}
+.w-mini{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;border:1.5px solid #7C8794;padding:8px;margin-bottom:12px;position:relative}
+.w-thumb{aspect-ratio:16/9;background:var(--pencil);border:1.5px solid var(--ink);display:grid;place-items:center;font:700 .9rem var(--serif);color:var(--ink)}
+.w-lines span{display:block;height:7px;background:#C4CCD5;margin:0 0 7px;border-radius:2px}
+.w-lines span:nth-child(2){width:80%}
+.w-lines span:nth-child(3){width:55%}
+.w-sug{border:1.5px solid var(--red);padding:8px 10px;position:relative}
+.w-sug p{margin:0 0 4px;font-size:.82rem;max-width:none}
+.pin{position:absolute;top:-11px;left:-11px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;font:700 12px/22px var(--sans);text-align:center}
+.w-box .pin{left:auto;right:-11px}
+.notes{list-style:none;padding:0;margin:0;max-width:none;counter-reset:n;display:grid;grid-template-columns:1fr 1fr;gap:10px 28px}
+.notes li{counter-increment:n;position:relative;padding-left:34px;margin:0;font-size:.95rem;line-height:1.5}
+.notes li::before{content:counter(n);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;font:700 12px/22px var(--sans);text-align:center}
+.notes b{display:block}
+
+/* flow */
+.flow{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:18px}
+.flow svg{display:block;min-width:780px;width:100%;height:auto}
+.flow text{font-family:var(--sans)}
+.msgs{display:grid;gap:14px;margin-bottom:20px}
+.msg{background:var(--sheet);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:var(--radius);padding:12px 16px}
+.msg.info{border-left-color:var(--blue)}
+.msg h4{margin:0 0 6px;font:700 1rem/1.3 var(--serif)}
+.msg .where{margin:0 0 8px;font-size:.88rem;color:var(--ink2)}
+.msg .ko{margin:0;padding:8px 10px;background:var(--paper);border-radius:3px;max-width:none}
+.msg .acts{margin:8px 0 0;font-size:.85rem;color:var(--ink2);max-width:none}
+
+/* system */
+.stack{display:grid;gap:0;margin-bottom:20px}
+.layer{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.layer h4{margin:0 0 8px;font:700 1rem/1.3 var(--serif)}
+.layer p{margin:0;font-size:.93rem}
+.down{text-align:center;color:var(--blue);font-size:1.2rem;line-height:1.6}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.two .layer{background:var(--paper)}
+.two .layer.live{border-style:dashed}
+
+.chip{font:600 .78rem var(--sans);font-style:normal;background:#E9ECF0;border-radius:3px;padding:1px 8px;margin-left:10px;vertical-align:middle;color:var(--ink)}
+.adiag{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:.85rem;color:var(--ink2);line-height:1.4}
+.adiag svg{width:112px;flex:none;border:1px solid var(--line);background:var(--paper)}
+.cmp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0 0 18px}
+.cmp figure{margin:0;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+.cmp figure.on{border:2px solid var(--blue)}
+.cmp figcaption{margin-top:8px;font-size:.92rem;line-height:1.5}
+.w-cmp{border:1.5px solid #7C8794;padding:8px 10px;position:relative;margin-top:14px;font-size:.85rem}
+.w-cmp .row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.w-cmp .row span{aspect-ratio:16/9;background:var(--pencil);border:1.5px solid var(--ink)}
+footer{border-top:2px solid var(--ink);margin-top:24px;padding:22px 0 48px;color:var(--ink2);font-size:.9rem}
+
+@media (max-width:1040px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:0;padding:0 20px}
+  .toc{position:static;padding:24px 0 0}
+  .toc ol{display:flex;flex-wrap:wrap;gap:2px 18px}
+  .toc li:not(.extra) a::before{width:auto;margin-right:.35em}
+  .toc li.extra a{padding-left:0}
+  .hero{padding-top:28px}
+}
+@media (max-width:820px){
+  .shot{grid-template-columns:minmax(0,1fr)}
+  .strip{grid-template-columns:minmax(0,1fr)}
+  .w-cols,.notes,.suggest,.two,.cmp{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:560px){
+  .shot dl{grid-template-columns:minmax(0,1fr);gap:0}
+  .shot dd{margin-bottom:10px}
+  .inputsheet{grid-template-columns:minmax(0,1fr);gap:2px}
+  .inputsheet dd{margin-bottom:10px}
+  h2{gap:12px}
+}
+</style>
+</head>
+<body>
+
+<!-- Storyboard panels and camera diagrams, generated from storyboard.py so the page matches the app. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="panel-1" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E4E8EC"/><rect y="120" width="320" height="60" fill="#CBD2DA"/><line x1="0" y1="120" x2="320" y2="120" stroke="#AEB8C3" stroke-width="2"/><rect x="238" y="22" width="66" height="98" fill="#CFE3F5" stroke="#8E9AA8" stroke-width="3"/><polygon points="238,22 262,31 262,118 238,120" fill="#A3AEBB" stroke="#7F8B99" stroke-width="2"/><g fill="#35598F"><rect x="91.2" y="73.9" width="13.6" height="24.4"/><path d="M77.7 212.0 L74.6 109.5 Q74.6 96.4 87.7 96.4 L108.3 96.4 Q121.4 96.4 121.4 109.5 L118.3 212.0 Z"/><circle cx="98.0" cy="73.9" r="17.9"/><polygon points="113.2,70.4 121.3,78.4 113.2,80.2"/></g><circle cx="98.0" cy="120.6" r="9.4" fill="#fff"/><text x="98.0" y="124.1" text-anchor="middle" font-family="sans-serif" font-size="11.7" font-weight="700" fill="#18212C">B</text><g fill="#1E2733"><rect x="207.2" y="73.9" width="13.6" height="24.4"/><path d="M193.7 212.0 L190.6 109.5 Q190.6 96.4 203.7 96.4 L224.3 96.4 Q237.4 96.4 237.4 109.5 L234.3 212.0 Z"/><circle cx="214.0" cy="73.9" r="17.9"/><polygon points="198.8,70.4 190.7,78.4 198.8,80.2"/></g><circle cx="214.0" cy="120.6" r="9.4" fill="#fff"/><text x="214.0" y="124.1" text-anchor="middle" font-family="sans-serif" font-size="11.7" font-weight="700" fill="#18212C">A</text></symbol>
+    <symbol id="panel-2" viewBox="0 0 320 180"><rect width="320" height="180" fill="#CBD2DA"/><rect width="320" height="16" fill="#E4E8EC"/><line x1="64.0" y1="16.0" x2="-160" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="82.0" y1="16.0" x2="-100" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="100.0" y1="16.0" x2="-40" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="118.0" y1="16.0" x2="20" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="136.0" y1="16.0" x2="80" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="154.0" y1="16.0" x2="140" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="172.0" y1="16.0" x2="200" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="190.0" y1="16.0" x2="260" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="208.0" y1="16.0" x2="320" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="226.0" y1="16.0" x2="380" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="244.0" y1="16.0" x2="440" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="30.0" x2="320" y2="30.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="50.0" x2="320" y2="50.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="78.0" x2="320" y2="78.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="114.0" x2="320" y2="114.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="158.0" x2="320" y2="158.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="16" x2="320" y2="16" stroke="#AEB8C3" stroke-width="2"/><g fill="#35598F"><path d="M52 180Q62 150 122 142H278Q318 150 322 180Z"/><rect x="186" y="134" width="28" height="14"/><ellipse cx="200" cy="106" rx="36" ry="40"/><polygon points="166,106 150,120 166,126"/></g><g fill="#1E2733"><ellipse cx="26" cy="98" rx="26" ry="34"/><path d="M0 128Q44 126 66 148Q80 162 82 180H0Z"/></g><circle cx="200.0" cy="166.0" r="11.0" fill="#fff"/><text x="200.0" y="170.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">B</text><circle cx="34.0" cy="164.0" r="11.0" fill="#fff"/><text x="34.0" y="168.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">A</text></symbol>
+    <symbol id="panel-3" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E4E8EC"/><polygon points="0,8.0 124.0,32.8 196.0,32.8 320,8.0 320,-40 0,-40" fill="#EEF0F3"/><polygon points="0,8.0 124.0,32.8 124.0,95.2 0,285.3" fill="#E1E6EB"/><polygon points="320,8.0 196.0,32.8 196.0,95.2 320,285.3" fill="#D7DDE4"/><polygon points="0,285.3 124.0,95.2 196.0,95.2 320,285.3 320,260 0,260" fill="#CBD2DA"/><rect x="124.0" y="32.8" width="72.0" height="62.4" fill="#D6DCE3" stroke="#AEB8C3" stroke-width="1.5"/><rect x="146" y="47.2" width="28" height="48.0" fill="#CFE3F5" stroke="#8E9AA8" stroke-width="2"/><line x1="0" y1="8.0" x2="124.0" y2="32.8" stroke="#AEB8C3" stroke-width="1.5"/><line x1="320" y1="8.0" x2="196.0" y2="32.8" stroke="#AEB8C3" stroke-width="1.5"/><line x1="0" y1="285.3" x2="124.0" y2="95.2" stroke="#AEB8C3" stroke-width="1.5"/><line x1="320" y1="285.3" x2="196.0" y2="95.2" stroke="#AEB8C3" stroke-width="1.5"/><g fill="none" stroke="#7F8B99" stroke-width="1.5" stroke-dasharray="4 3"><path d="M205.4 150.0 L202.3 125.3 Q202.3 120.8 206.7 120.8 L213.7 120.8 Q218.1 120.8 218.1 125.3 L215.1 150.0 Z"/><circle cx="210.2" cy="112.6" r="6.6"/></g><text x="210.2" y="99.0" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#C0392B">빈 자리</text><ellipse cx="109.8" cy="150.0" rx="8.7" ry="3.5" fill="#000" opacity=".13"/><g fill="#35598F"><rect x="107.3" y="112.6" width="5.0" height="10.2"/><path d="M104.9 150.0 L101.9 125.3 Q101.9 120.8 106.3 120.8 L113.3 120.8 Q117.7 120.8 117.7 125.3 L114.6 150.0 Z"/><circle cx="109.8" cy="112.6" r="6.6"/></g><circle cx="109.8" cy="130.2" r="6.5" fill="#fff"/><text x="109.8" y="132.6" text-anchor="middle" font-family="sans-serif" font-size="8.1" font-weight="700" fill="#18212C">B</text></symbol>
+    <symbol id="cmp-low" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E4E8EC"/><polygon points="0,0 320,0 320,22 0,38" fill="#EEF0F3"/><line x1="0" y1="38" x2="320" y2="22" stroke="#AEB8C3" stroke-width="2"/><rect x="128" y="8" width="64" height="7" rx="2" fill="#fff"/><polygon points="276,40 320,40 320,180 270,180" fill="#CFE3F5"/><g fill="#35598F"><path d="M84 180Q90 148 146 140H264Q312 148 316 180Z"/><rect x="184" y="114" width="32" height="30"/><ellipse cx="205" cy="66" rx="48" ry="58"/><polygon points="159,66 143,80 159,86"/></g><g fill="#1E2733"><ellipse cx="16" cy="44" rx="38" ry="52"/><path d="M0 92Q70 90 98 124Q116 150 120 180H0Z"/></g><circle cx="204.0" cy="166.0" r="11.0" fill="#fff"/><text x="204.0" y="170.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">B</text><circle cx="42.0" cy="150.0" r="11.0" fill="#fff"/><text x="42.0" y="154.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">A</text></symbol>
+    <symbol id="diag-low" viewBox="0 0 150 84"><line x1="6" y1="72.0" x2="144" y2="72.0" stroke="#AEB8C3" stroke-width="2"/><line x1="26.0" y1="30" x2="128.0" y2="30" stroke="#AEB8C3" stroke-width="1" stroke-dasharray="2 3"/><line x1="26.0" y1="67.0" x2="26.0" y2="72.0" stroke="#8E9AA8" stroke-width="1.5"/><g fill="#35598F"><circle cx="128.0" cy="30" r="6"/><path d="M120.0 72.0 L121.0 41 Q128.0 36 135.0 41 L136.0 72.0 Z"/></g><g transform="translate(26.0 62.0) rotate(-18.4)" fill="#18212C"><rect x="-9" y="-5" width="18" height="10" rx="2"/><polygon points="9,-3 15,-6 15,6 9,3"/></g><line x1="43.1" y1="56.3" x2="119.0" y2="31.0" stroke="#C0392B" stroke-width="1.6" stroke-dasharray="4 3"/><polygon points="119.0,31.0 114.0,35.9 112.1,30.1" fill="#C0392B"/></symbol>
+    <symbol id="cmp-eye" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E4E8EC"/><rect x="270" width="50" height="180" fill="#CFE3F5"/><g fill="#35598F"><path d="M92 180Q96 140 148 130H252Q304 140 308 180Z"/><rect x="186" y="122" width="28" height="24"/><ellipse cx="205" cy="84" rx="42" ry="50"/><polygon points="165,84 149,98 165,104"/></g><g fill="#1E2733"><ellipse cx="22" cy="58" rx="32" ry="44"/><path d="M0 100Q62 94 88 126Q106 150 110 180H0Z"/></g><circle cx="204.0" cy="162.0" r="11.0" fill="#fff"/><text x="204.0" y="166.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">B</text><circle cx="40.0" cy="156.0" r="11.0" fill="#fff"/><text x="40.0" y="160.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">A</text></symbol>
+    <symbol id="diag-eye" viewBox="0 0 150 84"><line x1="6" y1="72.0" x2="144" y2="72.0" stroke="#AEB8C3" stroke-width="2"/><line x1="26.0" y1="30" x2="128.0" y2="30" stroke="#AEB8C3" stroke-width="1" stroke-dasharray="2 3"/><line x1="26.0" y1="35.0" x2="26.0" y2="72.0" stroke="#8E9AA8" stroke-width="1.5"/><g fill="#35598F"><circle cx="128.0" cy="30" r="6"/><path d="M120.0 72.0 L121.0 41 Q128.0 36 135.0 41 L136.0 72.0 Z"/></g><g transform="translate(26.0 30.0) rotate(0.6)" fill="#18212C"><rect x="-9" y="-5" width="18" height="10" rx="2"/><polygon points="9,-3 15,-6 15,6 9,3"/></g><line x1="44.0" y1="30.2" x2="119.0" y2="31.0" stroke="#C0392B" stroke-width="1.6" stroke-dasharray="4 3"/><polygon points="119.0,31.0 112.7,34.0 112.7,27.9" fill="#C0392B"/></symbol>
+    <symbol id="cmp-high" viewBox="0 0 320 180"><rect width="320" height="180" fill="#CBD2DA"/><rect width="320" height="16" fill="#E4E8EC"/><line x1="64.0" y1="16.0" x2="-160" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="82.0" y1="16.0" x2="-100" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="100.0" y1="16.0" x2="-40" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="118.0" y1="16.0" x2="20" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="136.0" y1="16.0" x2="80" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="154.0" y1="16.0" x2="140" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="172.0" y1="16.0" x2="200" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="190.0" y1="16.0" x2="260" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="208.0" y1="16.0" x2="320" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="226.0" y1="16.0" x2="380" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="244.0" y1="16.0" x2="440" y2="180" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="30.0" x2="320" y2="30.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="50.0" x2="320" y2="50.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="78.0" x2="320" y2="78.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="114.0" x2="320" y2="114.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="158.0" x2="320" y2="158.0" stroke="#B9C2CC" stroke-width="1.2"/><line x1="0" y1="16" x2="320" y2="16" stroke="#AEB8C3" stroke-width="2"/><g fill="#35598F"><path d="M52 180Q62 150 122 142H278Q318 150 322 180Z"/><rect x="186" y="134" width="28" height="14"/><ellipse cx="200" cy="106" rx="36" ry="40"/><polygon points="166,106 150,120 166,126"/></g><g fill="#1E2733"><ellipse cx="26" cy="98" rx="26" ry="34"/><path d="M0 128Q44 126 66 148Q80 162 82 180H0Z"/></g><circle cx="200.0" cy="166.0" r="11.0" fill="#fff"/><text x="200.0" y="170.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">B</text><circle cx="34.0" cy="164.0" r="11.0" fill="#fff"/><text x="34.0" y="168.2" text-anchor="middle" font-family="sans-serif" font-size="13.8" font-weight="700" fill="#18212C">A</text></symbol>
+    <symbol id="diag-high" viewBox="0 0 150 84"><line x1="6" y1="72.0" x2="144" y2="72.0" stroke="#AEB8C3" stroke-width="2"/><line x1="26.0" y1="30" x2="128.0" y2="30" stroke="#AEB8C3" stroke-width="1" stroke-dasharray="2 3"/><line x1="26.0" y1="13.0" x2="26.0" y2="72.0" stroke="#8E9AA8" stroke-width="1.5"/><g fill="#35598F"><circle cx="128.0" cy="30" r="6"/><path d="M120.0 72.0 L121.0 41 Q128.0 36 135.0 41 L136.0 72.0 Z"/></g><g transform="translate(26.0 8.0) rotate(13.9)" fill="#18212C"><rect x="-9" y="-5" width="18" height="10" rx="2"/><polygon points="9,-3 15,-6 15,6 9,3"/></g><line x1="43.5" y1="12.3" x2="119.0" y2="31.0" stroke="#C0392B" stroke-width="1.6" stroke-dasharray="4 3"/><polygon points="119.0,31.0 112.2,32.4 113.6,26.5" fill="#C0392B"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="shell">
+  <nav class="toc" aria-label="Design Spec sections">
+    <p>Design Spec v1</p>
+    <ol>
+      <li><a href="#idea">The idea</a></li>
+      <li><a href="#example">Example</a></li>
+      <li class="extra"><a href="#camera">Camera angles</a></li>
+      <li><a href="#screens">Screen design</a></li>
+      <li><a href="#flow">User flow</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#ai">AI and prompts</a></li>
+      <li><a href="#system">System structure</a></li>
+      <li><a href="#risks">Risks and limits</a></li>
+      <li><a href="#cost">Cost plan</a></li>
+      <li class="extra"><a href="#versions">Version history</a></li>
+    </ol>
+  </nav>
+
+  <main id="main">
+
+    <header class="hero">
+      <h1>Between the Lines</h1>
+      <p class="lede">Type a short dialogue scene. Get a three-shot storyboard where the camera angle, position and framing are chosen to show what the scene means.</p>
+      <p class="meta">
+        <span>Design Spec, version 1. Final Term Project, due 16 Nov 2026.</span>
+        <span><span class="fill" style="display:inline">Your Name</span>, <span class="fill" style="display:inline">Student ID</span></span>
+      </p>
+
+      <div class="strip">
+        <figure><svg class="frame" role="img" aria-label="Shot 1: medium two-shot, eye level."><use href="#panel-1"/></svg><figcaption><b>Shot 1, medium two-shot</b><span>eye level<br><span lang="ko">A: 너도 같이 갈래?</span></span></figcaption></figure>
+        <figure><svg class="frame" role="img" aria-label="Shot 2: close-up, high angle."><use href="#panel-2"/></svg><figcaption><b>Shot 2, close-up</b><span>high angle<br><span lang="ko">B: 괜찮아. 먼저 가.</span></span></figcaption></figure>
+        <figure><svg class="frame" role="img" aria-label="Shot 3: wide shot, high angle."><use href="#panel-3"/></svg><figcaption><b>Shot 3, wide shot</b><span>high angle<br><span lang="ko">대사 없음</span></span></figcaption></figure>
+        </div>
+      <p class="strip-note">The saved demo result for the sample scene. Panels are drawn in code from original composition templates and a camera angle for each shot.</p>
+    </header>
+
+    <!-- 1 -->
+    <section id="idea" class="first">
+      <h2><span class="n">1</span>The idea</h2>
+      <p class="lead">Between the Lines helps film students and beginner filmmakers turn a short dialogue scene into a three-shot storyboard. The user types the dialogue for one or two characters and can add the location and what the audience should feel or understand. The app returns three storyboard panels, each with its shot size, camera angle, camera position, character placement, visible action and one acting note, plus one optional action or line to add before the scene and one after, kept apart from the original script. It matters because beginners often know what a scene says but not how to show it. Seeing the scene broken into three concrete shots, each with a reason tied to the directing intention, gives them something specific to discuss, test and change, whether they are planning a new scene or looking for a different way to direct one they have already written.</p>
+      <p>The app is built around how a film camera works. Where the camera stands changes what the audience feels about a character: a low angle looks up and makes the character look large and in control, an eye-level shot keeps characters equal, and a high angle looks down and makes the character look small and anxious. Each shot gets one of these angles, with a reason tied to the directing intention.</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="example">
+      <h2><span class="n">2</span>A concrete example</h2>
+      <p>One realistic input and the result the user sees. The interface text is in Korean because the target users write and shoot in Korean.</p>
+
+      <h3>Input</h3>
+      <div class="sheet" lang="ko">
+        <dl class="inputsheet">
+          <dt>등장인물 수</dt><dd>2</dd>
+          <dt>장소</dt><dd>복도 출입문 앞</dd>
+          <dt>연출 의도</dt><dd>B는 같이 가고 싶지만 붙잡지 못한다.</dd>
+          <dt>대사</dt><dd><span class="paper-text">A: 너도 같이 갈래?
+B: 괜찮아. 먼저 가.</span></dd>
+        </dl>
+      </div>
+
+      <div class="resulthead">
+        <h3 lang="ko">스토리보드</h3>
+        <span class="badge" lang="ko">데모 모드 · 저장된 예시 결과</span>
+      </div>
+
+      <article class="shot" lang="ko">
+        <div>
+          <svg class="frame" role="img" aria-label="Shot 1, medium two-shot, 아이레벨"><use href="#panel-1"/></svg>
+          <p class="tag" lang="en">Template: <code>medium_two_shot</code> · Angle: <code>eye_level</code></p>
+          <div class="adiag"><svg viewBox="0 0 150 84" aria-hidden="true"><use href="#diag-eye"/></svg><span>카메라를 인물의 눈높이에 둔다.</span></div>
+        </div>
+        <div>
+          <h4><span>1</span>미디엄 투샷<em class="chip">아이레벨</em></h4>
+          <dl>
+            <dt>카메라 앵글</dt><dd><b>아이레벨</b><br><span class="small">중립적이고 자연스럽다. 관객이 인물과 같은 높이에서 보게 되어 두 사람이 대등해 보인다.</span></dd>
+            <dt>카메라 위치</dt><dd>복도 안쪽에서 두 인물을 옆에서 바라본다. 카메라는 두 사람의 눈높이에 있다.</dd>
+            <dt>인물 위치와 행동</dt><dd>A는 오른쪽에서 문을 반쯤 열고 서서 첫 대사를 한다. B는 왼쪽에 서 있다가 대답하기 전에 문 쪽을 바라본다.</dd>
+            <dt>대사</dt><dd class="say">A: 너도 같이 갈래?</dd>
+            <dt>연기 노트</dt><dd>A는 질문을 던진 뒤에도 문을 잡은 손을 놓지 않고 B의 대답을 기다린다.</dd>
+            <dt>연출 이유</dt><dd>두 사람을 같은 눈높이에 두어 아직은 대등한 관계로 보여 준다. B가 문 쪽을 바라보는 시선이 다음 샷의 불안을 준비한다.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="shot" lang="ko">
+        <div>
+          <svg class="frame" role="img" aria-label="Shot 2, over-the-shoulder close-up, 하이 앵글"><use href="#panel-2"/></svg>
+          <p class="tag" lang="en">Template: <code>ots_close_up</code> · Angle: <code>high</code></p>
+          <div class="adiag"><svg viewBox="0 0 150 84" aria-hidden="true"><use href="#diag-high"/></svg><span>카메라를 인물보다 높게 두고 내려다본다.</span></div>
+        </div>
+        <div>
+          <h4><span>2</span>클로즈업 (오버 더 숄더)<em class="chip">하이 앵글</em></h4>
+          <dl>
+            <dt>카메라 앵글</dt><dd><b>하이 앵글</b> (B 기준)<br><span class="small">인물이 작고 약해 보인다. 불안, 무력감, 고립, 압박감을 준다.</span></dd>
+            <dt>카메라 위치</dt><dd>A의 어깨 바로 뒤에서, B의 눈높이보다 조금 높은 위치에서 B를 내려다본다.</dd>
+            <dt>인물 위치와 행동</dt><dd>B의 얼굴과 어깨가 화면 대부분을 차지하고, A의 어깨가 왼쪽 앞쪽에 걸쳐 있다. B는 두 문장을 이어서 말한다.</dd>
+            <dt>대사</dt><dd class="say">B: 괜찮아. 먼저 가.</dd>
+            <dt>연기 노트</dt><dd>“괜찮아.” 뒤에서 잠깐 멈추고, “먼저 가.”를 말할 때 A에게서 시선을 돌린다.</dd>
+            <dt>연출 이유</dt><dd>살짝 내려다보면 B가 작고 불안해 보인다. 같이 가고 싶지만 붙잡지 못하는 마음이 표정과 함께 드러나고, A의 어깨가 둘 사이의 거리를 보여 준다.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="shot" lang="ko">
+        <div>
+          <svg class="frame" role="img" aria-label="Shot 3, wide shot with empty space, 하이 앵글"><use href="#panel-3"/></svg>
+          <p class="tag" lang="en">Template: <code>wide_empty_space</code> · Angle: <code>high</code></p>
+          <div class="adiag"><svg viewBox="0 0 150 84" aria-hidden="true"><use href="#diag-high"/></svg><span>카메라를 인물보다 높게 두고 내려다본다.</span></div>
+        </div>
+        <div>
+          <h4><span>3</span>와이드 샷<em class="chip">하이 앵글</em></h4>
+          <dl>
+            <dt>카메라 앵글</dt><dd><b>하이 앵글</b> (B 기준)<br><span class="small">인물이 작고 약해 보인다. 불안, 무력감, 고립, 압박감을 준다.</span></dd>
+            <dt>카메라 위치</dt><dd>복도 저 멀리, 천장 가까운 높은 위치에서 아래로 내려다본다.</dd>
+            <dt>인물 위치와 행동</dt><dd>A는 이미 떠났다. B는 화면 왼쪽에 서 있고, A가 서 있던 오른쪽 자리는 비어 있다.</dd>
+            <dt>대사</dt><dd class="silent">대사 없음</dd>
+            <dt>연기 노트</dt><dd>B는 문이 닫힌 뒤에도 몇 초 동안 움직이지 않다가, 마지막에 숨을 한 번 내쉰다.</dd>
+            <dt>연출 이유</dt><dd>높은 위치에서 보면 B가 작아 보이고 빈 자리가 더 크게 느껴진다. 대사 없이도 붙잡지 못한 마음이 남는다.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <p class="small" lang="ko">가정: A는 문을 통해 떠난다.</p>
+
+      <div class="resulthead">
+        <h3 lang="ko">AI 연출 제안</h3>
+        <span class="small">Optional. Kept separate from the script and never added to the storyboard automatically.</span>
+      </div>
+      <div class="suggest" lang="ko">
+        <div class="sheet">
+          <h4>장면 시작 전</h4>
+          <p class="kind">행동 제안</p>
+          <dl>
+            <dt>제안</dt><dd>A가 먼저 가려고 몇 걸음 걷다가 멈추고, B 쪽으로 돌아선 뒤 질문한다.</dd>
+            <dt>바뀌는 점</dt><dd>A가 일부러 돌아와서 묻는 것이 되어, B의 거절이 더 아프게 보인다.</dd>
+          </dl>
+        </div>
+        <div class="sheet">
+          <h4>장면 끝난 후</h4>
+          <p class="kind">대사 제안</p>
+          <dl>
+            <dt>제안</dt><dd>B가 조용히 말한다. “같이 가고 싶었는데.”</dd>
+            <dt>바뀌는 점</dt><dd>B의 감정이 말로 직접 드러난다. 마지막 샷을 무음으로 두면 관객이 빈 프레임과 B의 반응에서 감정을 스스로 읽어 낼 수 있다.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <h3 id="camera">How the camera angle changes a shot</h3>
+      <p>Every shot has two separate choices. The <b>composition template</b> says what is in the frame. The <b>camera angle</b> says where the camera stands. The app draws the panel from both, so a change of angle is visible in the picture: a low angle shows a ceiling and larger figures, a high angle shows a wide floor and smaller figures.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Angle</th><th>What the camera does</th><th>Usual effect on the audience</th><th>In the sample scene</th></tr></thead>
+          <tbody>
+            <tr><td>Low angle</td><td>Sits below the character and looks up</td><td>The character looks large and in control: power, confidence, menace</td><td>Not used. Shown below for comparison.</td></tr>
+            <tr><td>Eye level</td><td>Sits at the character's eye height</td><td>Neutral. The characters look equal</td><td>Shot 1, where A and B are still on equal terms</td></tr>
+            <tr><td>High angle</td><td>Sits above the character and looks down</td><td>The character looks small, vulnerable, anxious, isolated</td><td>Shots 2 and 3, both about B</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The same close-up (shot 2) at all three angles. The directing intention is "B wants to go but cannot hold on", so the app picks the high angle: B looks small and anxious. A low angle would make B look strong and in control, which works against the intention.</p>
+      <div class="cmp">
+        <figure><svg class="frame" role="img" aria-label="Shot 2 composition at low angle"><use href="#cmp-low"/></svg><figcaption><b>Low angle</b> <span lang="ko">(로우 앵글)</span><br><span lang="ko">인물이 크고 단단해 보인다. 힘, 자신감, 위압감, 상황을 통제하는 느낌을 준다.</span></figcaption></figure>
+        <figure><svg class="frame" role="img" aria-label="Shot 2 composition at eye level"><use href="#cmp-eye"/></svg><figcaption><b>Eye level</b> <span lang="ko">(아이레벨)</span><br><span lang="ko">중립적이고 자연스럽다. 관객이 인물과 같은 높이에서 보게 되어 두 사람이 대등해 보인다.</span></figcaption></figure>
+        <figure class="on"><svg class="frame" role="img" aria-label="Shot 2 composition at high angle"><use href="#cmp-high"/></svg><figcaption><b>High angle</b> <span lang="ko">(하이 앵글)</span>, chosen for shot 2<br><span lang="ko">인물이 작고 약해 보인다. 불안, 무력감, 고립, 압박감을 준다.</span></figcaption></figure>
+      </div>
+      <p class="small">These effects are long-standing conventions, not rules. The meaning of an angle depends on the story, the performance and the shots around it, and the app tells the user so. The text that explains each angle comes from a catalog in the repository, so the model only chooses an angle and explains why; it cannot change what the angle means.</p>
+    </section>
+
+    <!-- 3 -->
+    <section id="screens">
+      <h2><span class="n">3</span>Screen design</h2>
+      <p>One page with two sections. On a wide screen the input is on the left and the result on the right. On a small screen the sections stack, input first. Red numbers match the notes below.</p>
+
+      <h3>Main screen, demo mode</h3>
+      <div class="wire" aria-hidden="true">
+        <div class="w-top">
+          <b>Between the Lines</b>
+          <span class="badge" lang="ko" style="position:relative"><span class="pin">1</span>데모 모드</span>
+        </div>
+        <div class="w-cols" lang="ko">
+          <div class="w-col">
+            <p class="w-h">장면 입력</p>
+            <p class="w-lab">등장인물 수</p>
+            <div class="w-box" style="padding:6px"><span class="pin">2</span><span class="w-seg"><span class="on">1</span><span>2</span></span></div>
+            <p class="w-lab">대사</p>
+            <div class="w-box tall"><span class="pin">3</span>A: 너도 같이 갈래?<br>B: 괜찮아. 먼저 가.</div>
+            <p class="w-lab">장소 (선택)</p>
+            <div class="w-box"><span class="pin">4</span>복도 출입문 앞</div>
+            <p class="w-lab">연출 의도 (선택)</p>
+            <div class="w-box"><span class="pin">5</span>B는 같이 가고 싶지만 붙잡지 못한다.</div>
+            <div class="w-btns">
+              <span class="w-btn"><span class="pin">6</span>예시 불러오기</span>
+              <span class="w-btn main"><span class="pin">7</span>스토리보드 만들기</span>
+            </div>
+          </div>
+          <div class="w-col">
+            <p class="w-h">스토리보드 <span class="badge" style="font-size:.75rem;margin-left:6px">데모 모드 · 저장된 예시 결과</span></p>
+            <div class="w-mini"><span class="pin">8</span><div class="w-thumb">1</div><div class="w-lines"><span></span><span></span><span></span></div></div>
+            <div class="w-mini"><div class="w-thumb">2</div><div class="w-lines"><span></span><span></span><span></span></div></div>
+            <div class="w-mini"><div class="w-thumb">3</div><div class="w-lines"><span></span><span></span><span></span></div></div>
+            <div class="w-sug"><span class="pin">9</span><p><b>AI 연출 제안</b></p><p>장면 시작 전: …</p><p>장면 끝난 후: …</p></div>
+            <div class="w-cmp"><span class="pin">10</span><b>앵글 비교</b><div class="row"><span></span><span></span><span></span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <ol class="notes">
+        <li><b>Mode label</b>Always visible. Says whether the app is in demo mode or live AI mode.</li>
+        <li><b>Character count</b>Choose 1 or 2. Decides which speakers are allowed (A only, or A and B).</li>
+        <li><b>Dialogue field</b>One line per turn, written <code lang="ko">A: 대사</code> or <code lang="ko">B: 대사</code>. Checked before anything is generated.</li>
+        <li><b>Location (optional)</b>Where the scene takes place. If it is empty, the model states its own assumption.</li>
+        <li><b>Directing intention (optional)</b>What the audience should feel or understand. The reason on each shot refers back to it.</li>
+        <li><b>Load sample</b>Fills the whole form with the sample scene.</li>
+        <li><b>Make storyboard</b>Checks the dialogue, then shows the saved result (demo) or generates one (live).</li>
+        <li><b>Shot card, three times</b>Panel, shot size, camera angle, camera position, placement and action, dialogue, acting note, reason.</li>
+        <li><b>AI 연출 제안</b>One optional suggestion before and one after the scene, each with what it changes. Never merged into the script or the shots.</li>
+        <li><b>앵글 비교</b>Optional reference. One shot's composition drawn at low, eye-level and high angle, with what each does to the audience.</li>
+      </ol>
+
+      <h3>Result card, in detail</h3>
+      <p>Each of the three cards has the same seven parts, so a student can compare shots at a glance.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Part</th><th>What it shows</th><th>Why it is there</th></tr></thead>
+          <tbody>
+            <tr><td>Panel</td><td>What the camera sees, drawn as silhouettes labeled A and B</td><td>Frame size and placement are visible before reading any text. The close-up shows B much larger than the wide shot.</td></tr>
+            <tr><td>Shot size</td><td>Medium two-shot, close-up, wide shot</td><td>Teaches the vocabulary.</td></tr>
+            <tr><td>Camera angle</td><td>Low angle, eye level or high angle, with a small side view of where the camera stands and what the angle does to the audience</td><td>Shows that the camera's height is a choice, and what it means.</td></tr>
+            <tr><td>Camera position</td><td>Where the camera stands relative to the characters or the place</td><td>The student can reproduce the shot.</td></tr>
+            <tr><td>Placement and action</td><td>Where each character is and what is visible</td><td>Blocking for the shot.</td></tr>
+            <tr><td>Dialogue</td><td>The user's own lines for this shot, or <span lang="ko">대사 없음</span></td><td>Shows which lines each shot covers. The model cannot rewrite them.</td></tr>
+            <tr><td>Acting note</td><td>One thing an actor can perform, such as a pause or a look away on a given word</td><td>Moves from camera to performance.</td></tr>
+            <tr><td>Reason</td><td>One short sentence on how the shot supports the directing intention</td><td>The student learns why, not only what.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="flow">
+      <h2><span class="n">4</span>User flow</h2>
+      <ol>
+        <li>The user opens the app. It starts in demo mode.</li>
+        <li>The user presses <span lang="ko">예시 불러오기</span>, or chooses 1 or 2 characters and types a scene.</li>
+        <li>The user presses <span lang="ko">스토리보드 만들기</span>.</li>
+        <li>The app checks the dialogue. If a line is wrong, it names the line and the rule, and the user fixes it and presses the button again.</li>
+        <li>The app shows three shot cards, each with its camera angle, and below them <span lang="ko">AI 연출 제안</span> and <span lang="ko">앵글 비교</span>.</li>
+        <li>The user edits the scene and repeats from step 3.</li>
+      </ol>
+
+      <div class="flow scroll">
+        <svg viewBox="0 0 960 250" role="img" aria-label="Flow: open the app, load the sample or type a scene, press make storyboard, check whether the dialogue is valid. If yes, three shot cards and AI suggestions appear. If no, an error names the line and the user edits and presses again.">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#18212C"/></marker></defs>
+          <g fill="#fff" stroke="#18212C" stroke-width="2">
+            <rect x="10" y="30" width="150" height="56" rx="4"/>
+            <rect x="200" y="30" width="170" height="56" rx="4"/>
+            <rect x="410" y="30" width="170" height="56" rx="4"/>
+            <polygon points="610,58 680,16 750,58 680,100"/>
+            <rect x="790" y="30" width="160" height="56" rx="4"/>
+          </g>
+          <rect x="560" y="150" width="240" height="60" rx="4" fill="#fff" stroke="#C0392B" stroke-width="2"/>
+          <g fill="#18212C" font-size="14" text-anchor="middle">
+            <text x="85" y="55">Open the app</text><text x="85" y="73" font-size="12" fill="#46515F">demo mode by default</text>
+            <text x="285" y="55">Load the sample</text><text x="285" y="73">or type a scene</text>
+            <text x="495" y="55">Press</text><text x="495" y="73">스토리보드 만들기</text>
+            <text x="680" y="62" font-size="13">Dialogue</text><text x="680" y="78" font-size="13">valid?</text>
+            <text x="870" y="55">3 shot cards</text><text x="870" y="73">+ AI 연출 제안</text>
+            <text x="680" y="176">Error names the line</text><text x="680" y="194">and the rule</text>
+          </g>
+          <g stroke="#18212C" stroke-width="2" fill="none" marker-end="url(#arr)">
+            <path d="M160 58H198"/><path d="M370 58H408"/><path d="M580 58H608"/><path d="M750 58H788"/>
+          </g>
+          <path d="M680 100V148" stroke="#C0392B" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+          <path d="M560 180H285V88" stroke="#C0392B" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+          <g font-size="13" fill="#46515F">
+            <text x="758" y="48">Yes</text><text x="690" y="126">No</text><text x="340" y="172" text-anchor="middle">edit and press again</text>
+          </g>
+        </svg>
+      </div>
+
+      <h3>Error and edge cases</h3>
+      <p>The required error case is the speaker outside the cast. The others are the cases most likely to confuse a user, so each one has a message that says what happened and what to do next.</p>
+      <div class="msgs">
+        <div class="msg">
+          <h4>Speaker outside the cast (main error case)</h4>
+          <p class="where">Input: 2 characters selected, line 2 is “C: 안녕”.</p>
+          <p class="ko" lang="ko">2번째 줄의 화자 C는 선택한 인원에 없습니다. 2명 장면에서는 A와 B만 쓸 수 있어요.</p>
+          <p class="acts">Nothing is generated. The user fixes the line or changes the character count.</p>
+        </div>
+        <div class="msg">
+          <h4>Empty dialogue, or a line without a speaker label</h4>
+          <p class="where">Input: empty field, or line 3 reads “다음에 보자”.</p>
+          <p class="ko" lang="ko">대사를 입력해 주세요. 한 줄에 한 마디씩 “A: 대사” 형식으로 적습니다.<br>3번째 줄에 화자 표시가 없습니다. “A: 대사” 또는 “B: 대사” 형식으로 써 주세요.</p>
+          <p class="acts">One message per case. A two-character scene where B never speaks is valid.</p>
+        </div>
+        <div class="msg info">
+          <h4>Edited scene in demo mode</h4>
+          <p class="where">Input: the user changes any part of the sample and presses the button.</p>
+          <p class="ko" lang="ko">직접 고친 장면은 라이브 AI 모드에서만 만들 수 있습니다. 데모 모드에서는 저장된 예시만 보여 드려요.</p>
+          <p class="acts">Button: <span lang="ko">예시 다시 불러오기</span>. The saved storyboard is never shown as if it were generated for the edited input.</p>
+        </div>
+        <div class="msg">
+          <h4>Live mode unavailable, or model output fails the check</h4>
+          <p class="where">Input: no local model is running, or the reply has the wrong number of shots, an unknown template or angle ID, or missing dialogue lines.</p>
+          <p class="ko" lang="ko">라이브 AI 모드에 연결할 수 없습니다. 모델 주소와 이름 설정을 확인하거나 예시 데모를 불러오세요.<br>스토리보드를 만들지 못했습니다. 모델 응답이 형식에 맞지 않았어요.</p>
+          <p class="acts">Buttons: <span lang="ko">다시 시도</span> and <span lang="ko">예시 불러오기</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="data">
+      <h2><span class="n">5</span>Data</h2>
+      <p>The app needs very little data, and every item in the default demo was created for this project. No film stills, published scripts or third-party images are used.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Item</th><th>Source</th><th>How it is collected</th><th>License or terms</th></tr></thead>
+          <tbody>
+            <tr><td>Sample scene</td><td>Written by the author for this project</td><td>Typed by hand, stored in <code>data/demo.json</code></td><td>Original work, shared under CC BY 4.0</td></tr>
+            <tr><td>Saved demo result</td><td>Written by the author</td><td>Authored by hand. It is not generated at run time.</td><td>Original work, shared under CC BY 4.0</td></tr>
+            <tr><td>Composition templates</td><td>Designed by the author</td><td>Hand-written JSON in <code>data/templates.json</code>. Panels are drawn in code, with no imported images.</td><td>Original work, shared under CC BY 4.0. Code under MIT.</td></tr>
+            <tr><td>Camera angle catalog</td><td>The author's own summary of common film-grammar conventions</td><td>Hand-written JSON in <code>data/camera_grammar.json</code>: what each angle does, when to use it, what to watch for</td><td>Original wording, shared under CC BY 4.0</td></tr>
+            <tr><td>The user's scene</td><td>Typed by the user at run time</td><td>Kept only for the current session. Not saved. In live mode it goes only to the model on the user's own computer.</td><td>The user's own content</td></tr>
+            <tr><td>Model weights (live mode)</td><td>An open-source instruction model from Hugging Face, not yet chosen</td><td>Downloaded once by the user, only if they want live mode</td><td>Set by the model's license. It will be recorded here and in the README once the model is chosen.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Composition template catalog</h3>
+      <p>A small JSON file. Each template has an ID, a shot size and the characters or roles it supports. Both demo and live results are drawn from it by the same renderer.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>ID</th><th>Shot size</th><th>Supports</th><th>What the panel draws</th></tr></thead>
+          <tbody>
+            <tr><td><code>medium_two_shot</code></td><td>Medium two-shot</td><td>A and B</td><td>Both characters at mid height, side view</td></tr>
+            <tr><td><code>ots_close_up</code></td><td>Over-the-shoulder close-up</td><td>One subject (A or B), the other as foreground</td><td>Subject large in frame, the other's shoulder in the foreground</td></tr>
+            <tr><td><code>wide_empty_space</code></td><td>Wide shot with empty space</td><td>One or two characters</td><td>Small figure on one side, the other side left empty</td></tr>
+            <tr><td><code>single_medium</code></td><td>Single-character medium shot</td><td>One character</td><td>One figure at mid height</td></tr>
+          </tbody>
+        </table>
+      </div>
+<pre><code>{
+  "id": "ots_close_up",
+  "shot_size": "over-the-shoulder close-up",
+  "shot_size_ko": "클로즈업 (오버 더 숄더)",
+  "roles": ["subject", "foreground"],
+  "required_roles": ["subject", "foreground"]
+}</code></pre>
+      <h3>Camera angle catalog</h3>
+      <p>A template says what is in the frame. The angle is chosen separately from a second small catalog, so any template can be shown at any angle.</p>
+<pre><code>{
+  "id": "high",
+  "name_ko": "하이 앵글",
+  "camera_ko": "카메라를 인물보다 높게 두고 내려다본다.",
+  "effect_ko": "인물이 작고 약해 보인다. 불안, 무력감, 고립, 압박감을 준다.",
+  "use_ko": "…",
+  "watch_ko": "…"
+}</code></pre>
+    </section>
+
+    <!-- 6 -->
+    <section id="ai">
+      <h2><span class="n">6</span>AI and prompts</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Mode</th><th>Model</th><th>How it is set up</th></tr></thead>
+          <tbody>
+            <tr><td>Demo (default)</td><td>None</td><td>Shows the saved result for the unchanged sample scene. No key, download or paid service.</td></tr>
+            <tr><td>Live</td><td>A locally running open-source instruction model, not yet chosen</td><td>Behind a separate adapter (<code>model_adapter.py</code>). The endpoint and model name are read from settings outside the source code, for example <code>LLM_ENDPOINT</code> and <code>LLM_MODEL</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><b>How the model will be chosen.</b> The license allows free use, it runs on an ordinary laptop, it follows a JSON format reliably, and it writes acceptable Korean. The choice and its license will be written into this page and the README. The adapter can also be pointed at another model, including Claude, without changing the rest of the app.</p>
+
+      <h3>Key prompt 1: instructions (system message)</h3>
+<pre><code>Turn the input scene into exactly three filmable shots. Use only the characters
+provided. Preserve the original dialogue and its order by referencing the
+supplied dialogue line IDs. Choose a composition template from the supplied
+catalog for each shot. Choose a camera angle from the supplied catalog for each
+shot and say which character the angle is about. For every shot, return the
+template ID, character placement, camera position, visible action, acting note,
+and a brief reason for the directing choice. Ground the choices in the directing
+intention when one is provided. If you assume a location or an emotional
+interpretation, state the assumption. Return optional before-scene and after-
+scene suggestions in separate fields. Return structured JSON.</code></pre>
+      <p>The same message adds a short camera angle guide and the JSON shape. The guide says these are conventions and the angle must be chosen for a reason that fits the directing intention:</p>
+<pre><code>Camera angle guide (conventions, not rules; pick the angle for a reason that fits the directing intention):
+- low: the camera looks up. The character looks larger, powerful, in control.
+- eye_level: neutral. The characters look equal.
+- high: the camera looks down. The character looks smaller, vulnerable, anxious, isolated.</code></pre>
+
+      <h3>Key prompt 2: scene (user message, filled in by the app)</h3>
+<pre><code>{
+  &quot;characters&quot;: [&quot;A&quot;, &quot;B&quot;],
+  &quot;location&quot;: &quot;복도 출입문 앞&quot;,
+  &quot;directing_intention&quot;: &quot;B는 같이 가고 싶지만 붙잡지 못한다.&quot;,
+  &quot;dialogue_lines&quot;: [
+    { &quot;id&quot;: &quot;L1&quot;, &quot;speaker&quot;: &quot;A&quot;, &quot;text&quot;: &quot;너도 같이 갈래?&quot; },
+    { &quot;id&quot;: &quot;L2&quot;, &quot;speaker&quot;: &quot;B&quot;, &quot;text&quot;: &quot;괜찮아. 먼저 가.&quot; }
+  ],
+  &quot;composition_templates&quot;: [
+    { &quot;id&quot;: &quot;medium_two_shot&quot;, &quot;shot_size&quot;: &quot;medium two-shot&quot;,
+      &quot;roles&quot;: [&quot;left&quot;, &quot;right&quot;], &quot;required_roles&quot;: [&quot;left&quot;, &quot;right&quot;] },
+    … three more
+  ],
+  &quot;camera_angles&quot;: [
+    { &quot;id&quot;: &quot;low&quot;, &quot;meaning&quot;: &quot;camera looks up; character looks larger, powerful, in control&quot; },
+    { &quot;id&quot;: &quot;eye_level&quot;, &quot;meaning&quot;: &quot;neutral; characters look equal&quot; },
+    { &quot;id&quot;: &quot;high&quot;, &quot;meaning&quot;: &quot;camera looks down; character looks smaller, vulnerable, anxious&quot; }
+  ]
+}</code></pre>
+
+      <h3>Expected reply (abridged)</h3>
+<pre><code>{
+  &quot;assumptions&quot;: [&quot;A는 문을 통해 떠난다.&quot;],
+  &quot;shots&quot;: [
+    { &quot;template_id&quot;: &quot;medium_two_shot&quot;, &quot;angle_id&quot;: &quot;eye_level&quot;, &quot;angle_focus&quot;: null,
+      &quot;roles&quot;: { &quot;B&quot;: &quot;left&quot;, &quot;A&quot;: &quot;right&quot; }, &quot;dialogue_line_ids&quot;: [&quot;L1&quot;],
+      &quot;camera_position&quot;: &quot;…&quot;, &quot;placement_and_action&quot;: &quot;…&quot;, &quot;acting_note&quot;: &quot;…&quot;, &quot;reason&quot;: &quot;…&quot; },
+    { &quot;template_id&quot;: &quot;ots_close_up&quot;, &quot;angle_id&quot;: &quot;high&quot;, &quot;angle_focus&quot;: &quot;B&quot;,
+      &quot;roles&quot;: { &quot;B&quot;: &quot;subject&quot;, &quot;A&quot;: &quot;foreground&quot; }, &quot;dialogue_line_ids&quot;: [&quot;L2&quot;], … },
+    { &quot;template_id&quot;: &quot;wide_empty_space&quot;, &quot;angle_id&quot;: &quot;high&quot;, &quot;angle_focus&quot;: &quot;B&quot;,
+      &quot;roles&quot;: { &quot;B&quot;: &quot;figure&quot;, &quot;A&quot;: &quot;absent&quot; }, &quot;dialogue_line_ids&quot;: [], … }
+  ],
+  &quot;suggestions&quot;: {
+    &quot;before&quot;: { &quot;kind&quot;: &quot;action&quot;,   &quot;text&quot;: &quot;…&quot;, &quot;effect&quot;: &quot;…&quot; },
+    &quot;after&quot;:  { &quot;kind&quot;: &quot;dialogue&quot;, &quot;text&quot;: &quot;…&quot;, &quot;effect&quot;: &quot;…&quot; }
+  }
+}</code></pre>
+
+      <h3>Check before anything is shown</h3>
+      <ul>
+        <li>There are exactly three shots.</li>
+        <li>Every template ID and angle ID is in its catalog. Every character, including the one an angle is about, is one the user provided, and the roles fit the template.</li>
+        <li>The dialogue line IDs, read across the three shots, include every original line exactly once and in the original order.</li>
+        <li>The dialogue text on screen comes from the user's input, looked up by ID. The model never supplies it, so it cannot rewrite it.</li>
+        <li>What an angle means (the effect shown on the card) comes from the app's catalog. The model chooses the angle and gives the reason.</li>
+        <li>If any check fails, the app says the storyboard could not be generated and offers to retry or load the demo.</li>
+      </ul>
+    </section>
+
+    <!-- 7 -->
+    <section id="system">
+      <h2><span class="n">7</span>System structure</h2>
+      <p>Four parts, built only from free and open tools. Demo mode uses the first two layers and the renderer. Live mode adds the dashed box.</p>
+
+      <div class="stack">
+        <div class="layer">
+          <h4>Interface: <code>app.py</code> (Streamlit)</h4>
+          <p>Input form, mode label, dialogue check, error messages, three shot cards and the suggestions section.</p>
+        </div>
+        <div class="down" aria-hidden="true">↓</div>
+        <div class="two">
+          <div class="layer">
+            <h4>Demo mode: <code>data/demo.json</code></h4>
+            <p>The saved sample scene and its saved result. Shown only while the input matches the sample.</p>
+          </div>
+          <div class="layer live">
+            <h4>Live mode: <code>model_adapter.py</code></h4>
+            <p>Builds the prompt, calls a local open-source model, parses the JSON and runs the checks from section 6. Scaffolded first, so live mode is the part that may remain planned.</p>
+          </div>
+        </div>
+        <div class="down" aria-hidden="true">↓</div>
+        <div class="layer">
+          <h4>Renderer: <code>storyboard.py</code>, <code>data/templates.json</code>, <code>data/camera_grammar.json</code></h4>
+          <p>Draws each panel as SVG from the chosen template and camera angle, plus a small side view of the camera. The same code serves demo and live results.</p>
+        </div>
+      </div>
+
+      <h3>Repository layout</h3>
+<pre><code>between-the-lines/
+├─ app.py               Streamlit page (draws what pipeline.py returns)
+├─ pipeline.py          decides what to show: demo, edited input, live, errors
+├─ scene.py             dialogue checks, validation of model output
+├─ storyboard.py        SVG renderer: composition template x camera angle
+├─ cards.py             HTML for the cards and suggestions
+├─ model_adapter.py     live mode only
+├─ data/
+│  ├─ templates.json       composition catalog
+│  ├─ camera_grammar.json  camera angle catalog
+│  └─ demo.json            sample scene and saved result
+├─ tests/               checks that do not need Streamlit
+├─ requirements.txt, README.md, LICENSE
+└─ docs/
+   └─ index.html        this Design Spec, served by GitHub Pages</code></pre>
+
+      <h3>Where each part lives</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Tool</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>GitHub</td><td>The code, the data and this Design Spec page (GitHub Pages)</td></tr>
+            <tr><td>Streamlit Community Cloud</td><td>A public link to the app in demo mode. It cannot reach a model on the user's own computer, so live mode runs locally.</td></tr>
+            <tr><td>Hugging Face</td><td>Where the open-source model is downloaded from, and where its license is read</td></tr>
+            <tr><td>Google Colab</td><td>Optional. A free place to test the prompt against a model before wiring it into the app.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section id="risks">
+      <h2><span class="n">8</span>Risks and limits</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>What could go wrong</th><th>How the design responds</th></tr></thead>
+          <tbody>
+            <tr><td>The model rewrites, reorders or drops dialogue</td><td>It returns line IDs only. The app prints the user's own text by ID and checks that every line is used once, in order.</td></tr>
+            <tr><td>The reply is malformed: wrong shot count, unknown template or character</td><td>The reply is validated. On failure the user sees a clear message and can retry or load the demo.</td></tr>
+            <tr><td>The saved demo is mistaken for a real result</td><td>It appears only for the unchanged sample, labeled <span lang="ko">데모 모드 · 저장된 예시 결과</span>. An edited scene gets a message instead.</td></tr>
+            <tr><td>The model reads too much into the emotion</td><td>Assumptions are stated, each reason is tied to the directing intention, and the suggestions are optional and separate from the script.</td></tr>
+            <tr><td>A small local model gives generic or awkward Korean</td><td>Korean quality is a selection criterion. The user can retry, and the demo always works.</td></tr>
+            <tr><td>Live mode is not available on the user's computer</td><td>A clear message and a button to load the sample demo.</td></tr>
+            <tr><td>The user reads an angle as a fixed rule ("high angle always means weak")</td><td>The app calls angle meanings conventions, shows the other angles for the same shot, and gives the reason for the choice in the user's own scene.</td></tr>
+            <tr><td>The model picks an angle that contradicts the intention</td><td>The reason must refer to the directing intention, the angle ID is validated, and the angle comparison lets the user see and judge the alternatives. The user decides.</td></tr>
+            <tr><td>The schematic panel is mistaken for the final image</td><td>Panels are labeled as drawn schematics. They show framing, height and placement only, not lighting, lens or acting.</td></tr>
+            <tr><td>A user's unpublished scene is exposed</td><td>Nothing is stored. In live mode the text goes only to a model on the same computer.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>What the app will not do</h3>
+      <ul>
+        <li>Write, change or "improve" the user's dialogue.</li>
+        <li>Handle more than two characters, or produce a number of shots other than three.</li>
+        <li>Produce realistic images. Panels are schematic silhouettes that show framing and placement only.</li>
+        <li>Claim that its choices are the correct way to direct the scene. They are one option to react to.</li>
+        <li>Cover lens choice, camera movement, lighting or Dutch angles in this version. Only camera angle, shot size and framing are modeled.</li>
+        <li>Insert its suggestions into the script or the storyboard automatically.</li>
+        <li>Save scenes or require an account.</li>
+      </ul>
+    </section>
+
+    <!-- 9 -->
+    <section id="cost">
+      <h2><span class="n">9</span>Cost plan</h2>
+      <p>The idea works end to end without a paid API. Demo mode is the default and needs nothing to be installed beyond Python and Streamlit.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Part</th><th>Free approach</th><th>Cost</th></tr></thead>
+          <tbody>
+            <tr><td>Demo mode</td><td>Saved sample and saved result in the repository</td><td>0</td></tr>
+            <tr><td>Panels</td><td>SVG drawn in code from original templates</td><td>0</td></tr>
+            <tr><td>Design Spec page</td><td>GitHub Pages</td><td>0</td></tr>
+            <tr><td>Public demo link</td><td>Streamlit Community Cloud, demo mode only</td><td>0</td></tr>
+            <tr><td>Live mode</td><td>Open-source model run locally; weights from Hugging Face; no API key</td><td>0, using the user's own computer</td></tr>
+            <tr><td>Prompt testing</td><td>Colab or a local run</td><td>0</td></tr>
+            <tr><td>If live mode is not available</td><td>The app says so and loads the sample demo</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- versions -->
+    <section id="versions">
+      <h2>Version history</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Version</th><th>Date</th><th>Feedback received</th><th>What changed</th></tr></thead>
+          <tbody>
+            <tr><td>v1</td><td>Due 16 Nov 2026</td><td>First version</td><td>This document</td></tr>
+            <tr><td>v2</td><td><span class="fill">date</span></td><td><span class="fill">add feedback here</span></td><td><span class="fill">add changes here</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small">Prototype code: <a href="https://github.com/YOUR-USERNAME/between-the-lines">github.com/YOUR-USERNAME/between-the-lines</a>. The prototype is a way to test the idea. The design in this document is the work being evaluated.</p>
+    </section>
+
+    <footer>
+      Between the Lines, Design Spec v1. Final Term Project by <span class="fill">Your Name</span>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>
