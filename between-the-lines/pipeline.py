@@ -11,9 +11,32 @@ import model_adapter
 import scene
 
 NOT_CONFIGURED = (
-    "라이브 AI 모드를 쓰려면 모델 주소와 이름을 설정해야 합니다. "
-    "README의 Live mode 항목을 확인하거나 예시 데모를 불러오세요."
+    "라이브 AI 모드는 내 컴퓨터에서 돌아가는 AI 모델이 있어야 쓸 수 있어요. "
+    "지금은 모델 설정이 없어서 만들지 못했습니다. 아래 ‘라이브 모드 설정 방법’을 보거나 예시 데모를 불러오세요."
 )
+
+LIVE_SETUP_HELP = """라이브 모드는 **내 컴퓨터에서 돌아가는 AI 모델**이 있어야 쓸 수 있어요. 처음 한 번만 설정하면 됩니다.
+
+1. [ollama.com](https://ollama.com)에서 Ollama를 설치하고 실행합니다.
+2. 터미널(Windows는 PowerShell)에서 모델을 내려받습니다. 아래 모델 이름은 예시예요. 쓰기 전에 모델의 라이선스와 한국어 성능을 직접 확인하세요.
+
+   `ollama pull qwen3:8b`
+3. **앱을 실행할 같은 터미널에서** 주소와 모델 이름을 설정합니다.
+
+   macOS / Linux:
+
+   `export BTL_LLM_ENDPOINT=http://localhost:11434/v1/chat/completions`
+
+   `export BTL_LLM_MODEL=qwen3:8b`
+
+   Windows PowerShell:
+
+   `$env:BTL_LLM_ENDPOINT = "http://localhost:11434/v1/chat/completions"`
+
+   `$env:BTL_LLM_MODEL = "qwen3:8b"`
+4. 같은 터미널에서 `streamlit run app.py`를 다시 실행하고, 라이브 AI 모드를 켠 뒤 ‘스토리보드 만들기’를 누릅니다.
+
+설정하지 않아도 ‘예시 불러오기’로 데모 모드는 쓸 수 있어요."""
 BAD_FORMAT = "스토리보드를 만들지 못했습니다. 모델 응답이 형식에 맞지 않았어요. 다시 시도하거나 예시 데모를 불러오세요."
 
 

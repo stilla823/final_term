@@ -107,6 +107,7 @@ def build_messages(lines, cast, location, intention, templates: dict, angles: di
 
 def extract_json(text: str) -> dict:
     """Parse the model's reply. Tolerates a code fence or a sentence around the object."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)  # reasoning models
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
     for candidate in (cleaned, cleaned[cleaned.find("{"): cleaned.rfind("}") + 1]):
         try:

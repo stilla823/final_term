@@ -86,7 +86,11 @@ $env:BTL_LLM_ENDPOINT = "http://localhost:11434/v1/chat/completions"
 $env:BTL_LLM_MODEL = "your-model-name"
 ```
 
+Set them in the **same terminal** you use to run `streamlit run app.py`, before you start it; a terminal opened later does not see them. The same steps, with the Ollama install, are shown in the app under "라이브 모드 설정 방법" whenever live mode is not set up.
+
 `BTL_LLM_TIMEOUT` (seconds, default 120) is optional. The model code lives only in `model_adapter.py`.
+
+The input fields are inside one Streamlit form, so nothing you type is sent or reset until you press **스토리보드 만들기**.
 
 Before anything is shown, the reply is checked: exactly three shots; valid character, template and camera angle IDs; roles that fit the template; and dialogue line IDs that cover every original line exactly once and in order. The dialogue on screen is looked up from the user's input by ID, so the model cannot rewrite it. If a check fails, the app says so and offers to retry or load the demo.
 

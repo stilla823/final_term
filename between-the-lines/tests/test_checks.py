@@ -256,6 +256,8 @@ def test_json_is_extracted_from_fenced_or_chatty_replies():
     assert run_generate(lambda *a: reply(body)) == DEMO
     assert run_generate(lambda *a: reply("```json\n" + body + "\n```")) == DEMO
     assert run_generate(lambda *a: reply("네, 여기 있어요.\n" + body + "\n끝")) == DEMO
+    # reasoning models put their thoughts (which may contain braces) before the answer
+    assert run_generate(lambda *a: reply("<think>{안 된다} 생각 중\n</think>\n" + body)) == DEMO
 
 
 def test_adapter_errors_are_user_facing():
@@ -372,6 +374,35 @@ def test_app_file_compiles_and_uses_required_labels():
     for label in ("장면 입력", "스토리보드", "AI 연출 제안", "예시 불러오기", "스토리보드 만들기", "장소", "연출 의도", "등장인물 수"):
         assert f'"{label}"' in source, label
     assert "B는 같이 가고 싶지만 붙잡지 못한다." in source
+
+
+def test_all_inputs_are_inside_one_form_so_leaving_a_field_cannot_reset_it():
+    import ast
+    tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+
+    def st_calls(node):
+        return [n.func.attr for n in ast.walk(node)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and isinstance(n.func.value, ast.Name) and n.func.value.id == "st"]
+
+    forms = [n for n in ast.walk(tree) if isinstance(n, ast.With)
+             and any(isinstance(i.context_expr, ast.Call) and getattr(i.context_expr.func, "attr", "") == "form"
+                     for i in n.items)]
+    assert len(forms) == 1
+    inside = st_calls(forms[0])
+    for widget in ("text_area", "text_input", "radio", "toggle"):
+        assert widget in inside, widget
+    assert inside.count("form_submit_button") == 1         # one submit button, so Enter can never load the sample
+    everything = st_calls(tree)
+    for widget in ("text_area", "text_input", "toggle"):
+        assert everything.count(widget) == inside.count(widget), f"{widget} used outside the form"
+
+
+def test_live_setup_help_has_what_a_beginner_needs():
+    text = pipeline.LIVE_SETUP_HELP
+    for needed in ("ollama", "BTL_LLM_ENDPOINT", "BTL_LLM_MODEL", "같은 터미널", "streamlit run app.py", "라이선스"):
+        assert needed in text, needed
+    assert "예시 데모" in pipeline.NOT_CONFIGURED and "라이브 모드 설정 방법" in pipeline.NOT_CONFIGURED
 
 
 if __name__ == "__main__":

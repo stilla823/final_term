@@ -45,6 +45,11 @@ def request_retry():
     st.session_state["_retry"] = True
 
 
+def live_help():
+    with st.expander("라이브 모드 설정 방법"):
+        st.markdown(pipeline.LIVE_SETUP_HELP)
+
+
 st.title("Between the Lines")
 st.caption("짧은 대사 장면을 카메라 앵글까지 정한 3컷 스토리보드로 바꿔 줍니다.")
 
@@ -53,26 +58,31 @@ left, right = st.columns([5, 7], gap="large")
 # ------------------------------------------------------------ 장면 입력
 with left:
     st.subheader("장면 입력")
-    st.toggle("라이브 AI 모드 (내 컴퓨터의 로컬 모델)", key="live")
-    st.markdown(cards.mode_badge(st.session_state["live"]), unsafe_allow_html=True)
+    st.button("예시 불러오기", key="load_sample_btn", on_click=load_sample)
+    badge_slot = st.empty()
 
-    st.radio("등장인물 수", [1, 2], key="cast_n", horizontal=True, format_func=lambda n: f"{n}명")
-    only = "A만 쓸 수 있어요." if st.session_state["cast_n"] == 1 else "A와 B를 쓸 수 있어요."
-    st.text_area(
-        "대사", key="dialogue", height=170,
-        placeholder="A: 안녕\nB: 응",
-        help="한 줄에 한 마디씩 “A: 대사” 또는 “B: 대사” 형식으로 적습니다.",
-    )
-    st.caption(f"한 줄에 한 마디씩 “A: 대사” 형식으로 적어요. {only}")
-    st.text_input("장소", key="location", help="선택 사항입니다.", placeholder="예: 복도 출입문 앞")
-    st.text_input(
-        "연출 의도", key="intention", help="선택 사항입니다.",
-        placeholder="B는 같이 가고 싶지만 붙잡지 못한다.",
-    )
+    # Everything the user types sits in one form. Nothing is sent to the server, and the page
+    # does not rerun, until the user presses the submit button. Moving from one field to the
+    # next therefore cannot reset what was typed.
+    with st.form("scene_form", clear_on_submit=False):
+        st.toggle(
+            "라이브 AI 모드 (내 컴퓨터의 로컬 모델)", key="live",
+            help="‘스토리보드 만들기’를 누르면 적용돼요. 끄면 데모 모드입니다.",
+        )
+        st.radio("등장인물 수", [1, 2], key="cast_n", horizontal=True, format_func=lambda n: f"{n}명")
+        st.text_area(
+            "대사", key="dialogue", height=170,
+            placeholder="A: 안녕\nB: 응",
+            help="한 줄에 한 마디씩 “A: 대사” 또는 “B: 대사” 형식으로 적습니다.",
+        )
+        st.caption("한 줄에 한 마디씩 “A: 대사” 형식으로 적어요. 1명 장면에서는 A만, 2명 장면에서는 A와 B를 쓸 수 있어요.")
+        st.text_input("장소", key="location", help="선택 사항입니다.", placeholder="예: 복도 출입문 앞")
+        st.text_input(
+            "연출 의도", key="intention", help="선택 사항입니다.",
+            placeholder="B는 같이 가고 싶지만 붙잡지 못한다.",
+        )
+        generate_clicked = st.form_submit_button("스토리보드 만들기", type="primary")
 
-    b1, b2 = st.columns(2)
-    b1.button("예시 불러오기", key="load_sample_btn", on_click=load_sample)
-    generate_clicked = b2.button("스토리보드 만들기", key="generate_btn", type="primary")
     messages = st.container()
 
     with st.expander("카메라 앵글 한눈에 보기"):
@@ -92,6 +102,9 @@ if generate_clicked or retry_requested:
             st.session_state["location"], st.session_state["intention"],
             st.session_state["live"], CAT,
         )
+
+# The label shows the mode the app is actually in (the last one that was submitted).
+badge_slot.markdown(cards.mode_badge(st.session_state["live"]), unsafe_allow_html=True)
 
 out = st.session_state["output"]
 fresh = out is not None and out["snapshot"] == snapshot
@@ -113,10 +126,11 @@ with right:
         st.info("왼쪽의 안내에 따라 대사를 고친 뒤 다시 눌러 주세요.")
     elif out["kind"] == "demo_custom":
         st.warning(
-            "직접 고친 장면은 라이브 AI 모드에서만 만들 수 있어요. "
-            "데모 모드에서는 저장된 예시 장면만 보여 드립니다."
+            "데모 모드에서는 저장된 예시 장면만 보여 드려요. "
+            "내가 쓴 장면으로 만들려면 라이브 AI 모드가 필요합니다."
         )
         st.button("예시 다시 불러오기", key="reload_btn", on_click=load_sample)
+        live_help()
     elif out["kind"] in ("live_error", "live_invalid"):
         st.error(out["message"])
         if out["kind"] == "live_invalid":
@@ -126,6 +140,7 @@ with right:
         c1, c2 = st.columns(2)
         c1.button("다시 시도", key="retry_btn", on_click=request_retry)
         c2.button("예시 불러오기", key="demo_btn", on_click=load_sample, kwargs={"to_demo": True})
+        live_help()
     else:
         data, lines = out["data"], out["lines"]
         st.markdown(cards.result_badge(out["mode"], out["model"]), unsafe_allow_html=True)
