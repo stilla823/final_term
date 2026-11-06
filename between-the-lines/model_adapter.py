@@ -38,12 +38,15 @@ Camera angle guide (conventions, not rules; pick the angle for a reason that fit
 - eye_level: neutral. The characters look equal.
 - high: the camera looks down. The character looks smaller, vulnerable, anxious, isolated.
 "roles" maps each character ID to a role of the chosen template. Use only the roles the template lists and include every required role.
+"gaze" maps each character who is in the frame to what that character looks at: partner (the other character, or the empty spot where they stood), door, away (looks aside, away from the other character) or down. "actions" maps each character in the frame to one pose: stand, hold_door, reach_out, hug_self, turn_away, head_down or walk_away. The storyboard drawing shows exactly these, so the Korean descriptions must agree with them. "props" may contain "door" when the scene has a door; leave it empty otherwise.
 "dialogue_line_ids" lists the supplied line IDs spoken in that shot, in order. Across the three shots every line ID must appear exactly once, in the original order. A silent shot has an empty list. Never write dialogue text yourself.
+"location" is "indoor" or "outdoor": the user only chose inside or outside. If you assume a more specific place, state it in "assumptions".
 Write every descriptive field in Korean. Reply with one JSON object and nothing else, shaped like this:
 {
   "assumptions": ["..."],
   "shots": [
     {"template_id": "...", "angle_id": "...", "angle_focus": "A or B or null", "roles": {"A": "..."},
+     "gaze": {"A": "partner"}, "actions": {"A": "stand"}, "props": [],
      "dialogue_line_ids": ["L1"], "camera_position": "...", "placement_and_action": "...",
      "acting_note": "...", "reason": "..."}
   ],

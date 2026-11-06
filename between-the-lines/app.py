@@ -3,7 +3,7 @@
 Run with:  streamlit run app.py
 
 This file only draws the page. The logic lives in pipeline.py, scene.py,
-storyboard.py, cards.py and model_adapter.py.
+storyboard.py, sketch.py, cards.py and model_adapter.py.
 """
 from pathlib import Path
 
@@ -12,6 +12,12 @@ import streamlit as st
 import cards
 import pipeline
 import scene
+import sketch
+
+try:
+    import streamlit.components.v1 as components
+except ImportError:  # very old Streamlit: the plain-image card is used instead
+    components = None
 
 st.set_page_config(page_title="Between the Lines", page_icon="🎬", layout="wide")
 st.markdown(cards.CSS, unsafe_allow_html=True)
@@ -26,8 +32,8 @@ CAT = get_catalogs()
 SAMPLE = CAT["demo"]["sample"]
 
 for key, value in {
-    "cast_n": 2, "dialogue": "", "location": "", "intention": "",
-    "live": False, "output": None, "compare_shot": 1,
+    "cast_n": 2, "dialogue": "", "location": "indoor", "intention": "",
+    "live": False, "output": None,
 }.items():
     st.session_state.setdefault(key, value)
 
@@ -45,6 +51,29 @@ def request_retry():
     st.session_state["_retry"] = True
 
 
+def show_shot(index: int, shot: dict, lines) -> None:
+    """One shot card. The panel is a Rough.js hand-drawn sketch inside an HTML component.
+
+    If the component cannot be used (Rough.js file missing or changed, or no components API),
+    the same card is shown with plain images instead, so the app still works."""
+    template, angle = CAT["templates"][shot["template_id"]], CAT["angles"][shot["angle_id"]]
+    dialogue = scene.dialogue_for_shot(shot, lines)
+    if components is None or sketch.rough_source() is None:
+        st.markdown(cards.shot_card(index, shot, template, angle, dialogue), unsafe_allow_html=True)
+        return
+    with st.container(border=True):
+        st.markdown(cards.shot_header_html(index, template, angle), unsafe_allow_html=True)
+        visual, details = st.columns([5, 6], gap="medium")
+        with details:
+            st.markdown(cards.shot_details_html(shot, template, angle, dialogue), unsafe_allow_html=True)
+        with visual:
+            try:
+                components.html(cards.shot_sketch_html(index, shot, template, angle), height=sketch.FALLBACK_HEIGHT)
+            except Exception:  # keep the page alive; show the panel as a plain image
+                panel, _, _ = cards.panel_svgs(index, shot, template, angle)
+                st.markdown(cards.svg_img(panel, f"샷 {index}"), unsafe_allow_html=True)
+
+
 def live_help():
     with st.expander("라이브 모드 설정 방법"):
         st.markdown(pipeline.LIVE_SETUP_HELP)
@@ -53,7 +82,7 @@ def live_help():
 st.title("Between the Lines")
 st.caption("짧은 대사 장면을 카메라 앵글까지 정한 3컷 스토리보드로 바꿔 줍니다.")
 
-left, right = st.columns([5, 7], gap="large")
+left, right = st.columns([4, 8], gap="large")
 
 # ------------------------------------------------------------ 장면 입력
 with left:
@@ -76,7 +105,10 @@ with left:
             help="한 줄에 한 마디씩 “A: 대사” 또는 “B: 대사” 형식으로 적습니다.",
         )
         st.caption("한 줄에 한 마디씩 “A: 대사” 형식으로 적어요. 1명 장면에서는 A만, 2명 장면에서는 A와 B를 쓸 수 있어요.")
-        st.text_input("장소", key="location", help="선택 사항입니다.", placeholder="예: 복도 출입문 앞")
+        st.selectbox(
+            "장소", list(scene.LOCATIONS), key="location", format_func=scene.LOCATIONS.get,
+            help="장면이 실내에서 일어나는지, 실외에서 일어나는지 골라 주세요.",
+        )
         st.text_input(
             "연출 의도", key="intention", help="선택 사항입니다.",
             placeholder="B는 같이 가고 싶지만 붙잡지 못한다.",
@@ -145,27 +177,12 @@ with right:
         data, lines = out["data"], out["lines"]
         st.markdown(cards.result_badge(out["mode"], out["model"]), unsafe_allow_html=True)
         for i, shot in enumerate(data["shots"], start=1):
-            st.markdown(
-                cards.shot_card(
-                    i, shot, CAT["templates"][shot["template_id"]], CAT["angles"][shot["angle_id"]],
-                    scene.dialogue_for_shot(shot, lines),
-                ),
-                unsafe_allow_html=True,
-            )
+            show_shot(i, shot, lines)
         st.markdown(cards.assumptions_html(data.get("assumptions", [])), unsafe_allow_html=True)
 
         st.subheader("AI 연출 제안")
         st.caption("원래 대본과 별개의 선택 사항입니다. 스토리보드에 자동으로 넣지 않았어요.")
         st.markdown(cards.suggestions_html(data["suggestions"]), unsafe_allow_html=True)
 
-        st.subheader("앵글 비교")
-        st.caption("같은 구도를 세 가지 카메라 앵글로 그려 본 참고 그림입니다. " + CAT["disclaimer"])
-        shot_no = st.radio("비교할 샷", [1, 2, 3], key="compare_shot", horizontal=True, format_func=lambda i: f"샷 {i}")
-        chosen = data["shots"][shot_no - 1]
-        st.markdown(
-            cards.compare_html(chosen, CAT["templates"][chosen["template_id"]], CAT["angles"], CAT["angle_order"]),
-            unsafe_allow_html=True,
-        )
-
 st.divider()
-st.caption("샘플 장면, 구도 템플릿, 앵글 설명은 이 프로젝트를 위해 직접 만든 것입니다. 패널은 코드로 그린 도식이며 실제 이미지가 아닙니다.")
+st.caption("샘플 장면, 구도 템플릿, 앵글 설명은 이 프로젝트를 위해 직접 만든 것입니다. 패널은 코드로 그린 도식이며 실제 이미지가 아닙니다. 손그림 느낌은 Rough.js(MIT 라이선스)로 그렸어요.")

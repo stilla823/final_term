@@ -8,9 +8,29 @@ import re
 from dataclasses import dataclass
 
 SPEAKERS = ("A", "B")
+LOCATIONS = {"indoor": "실내", "outdoor": "실외"}   # id (sent to the model) -> label shown in the select box
 LINE_RE = re.compile(r"^\s*([A-Za-z])\s*[:：]\s*(.*?)\s*$")
 SHOT_COUNT = 3
 SHOT_TEXT_FIELDS = ("camera_position", "placement_and_action", "acting_note", "reason")
+
+# What the storyboard drawing can show. "gaze" and "actions" map a character ID to one of these IDs.
+# The labels are what the shot card prints, so the words match the arrows and poses in the panel.
+GAZE_TARGETS = {
+    "partner": "상대를 본다",
+    "door": "문 쪽을 본다",
+    "away": "시선을 돌린다",
+    "down": "아래를 본다",
+}
+ACTIONS = {
+    "stand": "가만히 서 있다",
+    "hold_door": "문을 잡는다",
+    "reach_out": "손을 뻗는다",
+    "hug_self": "팔을 모은다",
+    "turn_away": "몸을 돌린다",
+    "head_down": "고개를 숙인다",
+    "walk_away": "걸어 나간다",
+}
+PROPS = ("door",)
 
 
 @dataclass(frozen=True)
@@ -82,6 +102,27 @@ def _text_ok(value) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _check_drawing_hints(tag: str, shot: dict, roles: dict) -> list[str]:
+    """`gaze`, `actions` and `props` are optional, but when they are present the drawing relies on them."""
+    problems: list[str] = []
+    for key, allowed in (("gaze", GAZE_TARGETS), ("actions", ACTIONS)):
+        value = shot.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            problems.append(f"{tag}: {key}가 객체가 아닙니다.")
+            continue
+        for char, choice in value.items():
+            if char not in roles:
+                problems.append(f"{tag}: {key}에 이 샷에 나오지 않는 인물({char!r})이 있습니다.")
+            if choice not in allowed:
+                problems.append(f"{tag}: {key}의 값({choice!r})을 쓸 수 없습니다. 가능한 값: {', '.join(allowed)}.")
+    props = shot.get("props")
+    if props is not None and not (isinstance(props, list) and all(isinstance(x, str) for x in props)):
+        problems.append(f"{tag}: props가 문자열 목록이 아닙니다.")
+    return problems
+
+
 def validate_model_output(data, lines: list[Line], cast: list[str], templates: dict, angles: dict) -> list[str]:
     """Return a list of problems. An empty list means the output can be shown.
 
@@ -132,6 +173,8 @@ def validate_model_output(data, lines: list[Line], cast: list[str], templates: d
                 for needed in template["required_roles"]:
                     if needed not in values:
                         problems.append(f"{tag}: 필요한 역할({needed})이 빠졌습니다.")
+
+        problems.extend(_check_drawing_hints(tag, shot, roles if isinstance(roles, dict) else {}))
 
         for field in SHOT_TEXT_FIELDS:
             if not _text_ok(shot.get(field)):

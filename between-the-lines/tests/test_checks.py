@@ -4,6 +4,10 @@ Run with:  python tests/test_checks.py      (or: python -m pytest tests)
 """
 import base64
 import copy
+import hashlib
+import shutil
+import subprocess
+import tempfile
 import json
 import py_compile
 import re
@@ -19,6 +23,7 @@ import cards  # noqa: E402
 import model_adapter  # noqa: E402
 import pipeline  # noqa: E402
 import scene  # noqa: E402
+import sketch  # noqa: E402
 import storyboard  # noqa: E402
 
 CAT = pipeline.load_catalogs(ROOT / "data")
@@ -180,7 +185,7 @@ def test_demo_mode_never_returns_saved_result_for_edited_input():
     cast, dialogue, location, intention = sample_args()
     for edited in (
         (cast, dialogue.replace("갈래", "갈래요"), location, intention),
-        (cast, dialogue, "교실", intention),
+        (cast, dialogue, "outdoor", intention),
         (cast, dialogue, location, "A가 화가 났다."),
         (1, "A: 너도 같이 갈래?", location, intention),
     ):
@@ -227,7 +232,7 @@ def reply(content):
 
 
 def run_generate(post):
-    return model_adapter.generate(CONFIG, sample_lines(), ["A", "B"], "복도", "의도",
+    return model_adapter.generate(CONFIG, sample_lines(), ["A", "B"], "indoor", "의도",
                                   CAT["templates"], CAT["angles"], post=post)
 
 
@@ -248,6 +253,7 @@ def test_prompt_contains_the_brief_and_the_catalogs():
     assert [l["id"] for l in scene_in["dialogue_lines"]] == ["L1", "L2"]
     assert {t["id"] for t in scene_in["composition_templates"]} == set(CAT["templates"])
     assert {a["id"] for a in scene_in["camera_angles"]} == {"low", "eye_level", "high"}
+    assert scene_in["location"] == "indoor"
     assert sent["model"] == "stub-model"
 
 
@@ -362,10 +368,20 @@ def test_suggestions_are_a_separate_block_with_effects():
     assert "행동 제안" in h and "대사 제안" in h
 
 
-def test_angle_comparison_marks_the_chosen_angle_once():
-    shot = DEMO["shots"][1]
-    h = cards.compare_html(shot, CAT["templates"][shot["template_id"]], CAT["angles"], CAT["angle_order"])
-    assert h.count("이 샷의 선택") == 1 and h.count("<img") == 3
+def test_angle_comparison_is_gone_but_suggestions_and_angle_guide_stay():
+    assert not hasattr(cards, "compare_html")
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert "앵글 비교" not in source and "compare" not in source
+    assert "AI 연출 제안" in source and "angle_guide_html" in source
+
+
+def test_location_is_a_two_choice_select_box():
+    assert scene.LOCATIONS == {"indoor": "실내", "outdoor": "실외"}
+    assert SAMPLE["location"] == "indoor"
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert "st.selectbox(" in source and 'key="location"' in source
+    assert '"location": "indoor"' in source                       # the form starts on a valid choice
+    assert "실내" in DEMO["assumptions"][0]                         # the saved demo states its place assumption
 
 
 def test_app_file_compiles_and_uses_required_labels():
@@ -390,11 +406,11 @@ def test_all_inputs_are_inside_one_form_so_leaving_a_field_cannot_reset_it():
                      for i in n.items)]
     assert len(forms) == 1
     inside = st_calls(forms[0])
-    for widget in ("text_area", "text_input", "radio", "toggle"):
+    for widget in ("text_area", "text_input", "radio", "toggle", "selectbox"):
         assert widget in inside, widget
     assert inside.count("form_submit_button") == 1         # one submit button, so Enter can never load the sample
     everything = st_calls(tree)
-    for widget in ("text_area", "text_input", "toggle"):
+    for widget in ("text_area", "text_input", "toggle", "selectbox"):
         assert everything.count(widget) == inside.count(widget), f"{widget} used outside the form"
 
 
@@ -403,6 +419,182 @@ def test_live_setup_help_has_what_a_beginner_needs():
     for needed in ("ollama", "BTL_LLM_ENDPOINT", "BTL_LLM_MODEL", "같은 터미널", "streamlit run app.py", "라이선스"):
         assert needed in text, needed
     assert "예시 데모" in pipeline.NOT_CONFIGURED and "라이브 모드 설정 방법" in pipeline.NOT_CONFIGURED
+
+
+# ------------------------------------------------------ Rough.js and the sketch page
+
+def demo_shot(i):
+    return DEMO["shots"][i]
+
+
+def test_bundled_rough_js_is_the_pinned_unmodified_file_with_its_license():
+    data = (ROOT / "vendor" / "rough" / "rough.js").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == sketch.ROUGH_SHA256
+    assert b"</script" not in data.lower()
+    assert sketch.rough_source() is not None
+    license_text = (ROOT / "vendor" / "rough" / "LICENSE").read_text(encoding="utf-8")
+    assert "MIT License" in license_text and "Preet Shihn" in license_text
+    notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "Preet Shihn" in notices and "Permission is hereby granted" in notices and sketch.ROUGH_VERSION in notices
+    readme = (ROOT / "vendor" / "rough" / "README.md").read_text(encoding="utf-8")
+    assert sketch.ROUGH_SHA256 in readme and "github.com/rough-stuff/rough" in readme
+
+
+def test_sketch_page_embeds_rough_notice_script_and_all_three_drawings():
+    shot = demo_shot(0)
+    panel, side, top = cards.panel_svgs(1, shot, CAT["templates"][shot["template_id"]], CAT["angles"][shot["angle_id"]])
+    page = cards.shot_sketch_html(1, shot, CAT["templates"][shot["template_id"]], CAT["angles"][shot["angle_id"]])
+    assert page.count("<svg") == 3 and panel in page and side in page and top in page
+    assert "MIT License, Copyright (c) 2019 Preet Shihn" in page
+    assert "rough.svg(" in page and "<script>" in page
+    assert "https://" not in page.replace("https://github.com/rough-stuff/rough", "").replace("http://www.w3.org/2000/svg", "")
+
+
+def test_sketch_page_without_rough_is_still_a_plain_drawing():
+    plain = sketch.sketch_html("<svg data-seed='1'></svg>", "<svg></svg>", "<svg></svg>", "a", "b", use_rough=False)
+    assert "<script" not in plain and "<svg" in plain
+
+
+def test_sketch_page_falls_back_if_the_bundle_is_changed():
+    real = sketch.ROUGH_FILE
+    with tempfile.TemporaryDirectory() as folder:
+        fake = Path(folder) / "rough.js"
+        fake.write_text("alert(1)", encoding="utf-8")
+        sketch.ROUGH_FILE = fake
+        sketch.rough_source.cache_clear()
+        try:
+            assert sketch.rough_source() is None
+            assert "<script" not in sketch.sketch_html("<svg></svg>", "<svg></svg>", "<svg></svg>", "a", "b")
+        finally:
+            sketch.ROUGH_FILE = real
+            sketch.rough_source.cache_clear()
+    assert sketch.rough_source() is not None
+
+
+def test_roughify_script_is_valid_javascript():
+    node = shutil.which("node")
+    if node is None:
+        return  # the browser check covers this when node is not installed
+    with tempfile.TemporaryDirectory() as folder:
+        target = Path(folder) / "sketch.js"
+        target.write_text(sketch.SCRIPT, encoding="utf-8")
+        result = subprocess.run([node, "--check", str(target)], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+
+
+def test_every_drawn_shape_is_marked_for_rough_and_uses_plain_svg_attributes():
+    svg = storyboard.render_panel("medium_two_shot", "eye_level", {"B": "left", "A": "right"}, ["door"],
+                                  gaze={"A": "partner", "B": "door"}, actions={"A": "hold_door"})
+    root = ET.fromstring(svg)
+    shapes = [e for e in root.iter() if e.tag.split("}")[1] in ("rect", "circle", "ellipse", "line", "polygon", "path")]
+    marked = [e for e in shapes if "data-sk" in e.attrib]
+    assert len(marked) >= 30 and len(marked) >= len(shapes) - 1     # only the paper rectangle is left plain
+    assert all(e.get("data-sk") in ("bg", "s", "fine") for e in marked)
+    assert root.get("data-seed", "").isdigit()
+    assert svg == storyboard.render_panel("medium_two_shot", "eye_level", {"B": "left", "A": "right"}, ["door"],
+                                          gaze={"A": "partner", "B": "door"}, actions={"A": "hold_door"})  # stable seed
+
+
+# ------------------------------------------------- gaze, action, framing, placement
+
+def test_gaze_and_action_change_the_drawing():
+    roles = {"B": "left", "A": "right"}
+    base = storyboard.render_panel("medium_two_shot", "eye_level", roles, ["door"])
+    seen = {base}
+    for gaze in ({"B": "door"}, {"B": "away"}, {"B": "down"}):
+        seen.add(storyboard.render_panel("medium_two_shot", "eye_level", roles, ["door"], gaze=gaze))
+    for action in scene.ACTIONS:
+        seen.add(storyboard.render_panel("medium_two_shot", "eye_level", roles, ["door"], actions={"A": action}))
+    assert len(seen) == 1 + 3 + len(scene.ACTIONS) - 1          # "stand" is the default pose, so it equals the base
+
+
+def test_gaze_arrow_is_drawn_only_when_a_character_looks_at_something():
+    arrow = f'stroke="{storyboard.ACCENT}"'
+    one = storyboard.render_panel("single_medium", "eye_level", {"A": "figure"})      # alone: nothing to look at
+    assert arrow not in one
+    assert arrow in storyboard.render_panel("single_medium", "eye_level", {"A": "figure"}, gaze={"A": "away"})
+    for shot in DEMO["shots"]:
+        svg = storyboard.render_panel(shot["template_id"], shot["angle_id"], shot["roles"], shot.get("props", ()),
+                                      gaze=shot.get("gaze"), actions=shot.get("actions"))
+        assert arrow in svg, shot["template_id"]
+
+
+def test_every_template_angle_gaze_and_action_combination_draws_valid_svg():
+    templates = {
+        "medium_two_shot": {"B": "left", "A": "right"}, "single_medium": {"A": "figure"},
+        "ots_close_up": {"B": "subject", "A": "foreground"}, "wide_empty_space": {"B": "figure", "A": "absent"},
+    }
+    count = 0
+    for template, roles in templates.items():
+        for angle in storyboard.ANGLE_IDS:
+            for gaze in list(scene.GAZE_TARGETS):
+                for action in scene.ACTIONS:
+                    who = next(c for c, r in roles.items() if r != "absent")
+                    for props in ((), ("door",)):
+                        ET.fromstring(storyboard.render_panel(template, angle, roles, props, gaze={who: gaze}, actions={who: action}))
+                        ET.fromstring(storyboard.blocking_diagram(template, angle, roles, props, gaze={who: gaze}))
+                        count += 1
+    assert count == 4 * 3 * 4 * 7 * 2
+
+
+def test_panel_names_the_framing_and_the_angle():
+    svg = storyboard.render_panel("ots_close_up", "high", {"B": "subject", "A": "foreground"})
+    assert "OTS CU" in svg and "HIGH" in svg
+    assert "WS" in storyboard.render_panel("wide_empty_space", "low", {"A": "figure"})
+
+
+def test_plan_view_shows_placement_and_camera_and_marks_the_empty_spot():
+    top = storyboard.blocking_diagram("wide_empty_space", "high", {"B": "figure", "A": "absent"}, gaze={"B": "partner"})
+    assert ">B<" in top and ">A<" in top and 'stroke-dasharray="3 2"' in top
+    door = storyboard.blocking_diagram("medium_two_shot", "eye_level", {"B": "left", "A": "right"}, ["door"])
+    assert "문" in door and "문" not in storyboard.blocking_diagram("medium_two_shot", "eye_level", {"B": "left", "A": "right"})
+
+
+def test_demo_shots_carry_gaze_and_actions_that_the_card_prints():
+    lines = sample_lines()
+    for shot in DEMO["shots"]:
+        assert shot["gaze"] and shot["actions"]
+    html_text = cards.shot_details_html(DEMO["shots"][0], CAT["templates"]["medium_two_shot"], CAT["angles"]["eye_level"],
+                                        scene.dialogue_for_shot(DEMO["shots"][0], lines))
+    assert "문을 잡는다" in html_text and "문 쪽을 본다" in html_text and "상대를 본다" in html_text
+    third = cards.shot_details_html(DEMO["shots"][2], CAT["templates"]["wide_empty_space"], CAT["angles"]["high"], [])
+    assert "<b>B</b>" in third and "<b>A</b>" not in third          # the absent character has no pose
+
+
+def test_validation_checks_gaze_actions_and_props_when_present():
+    lines, cast = sample_lines(), ["A", "B"]
+
+    def problems(change):
+        data = copy.deepcopy(DEMO)
+        change(data["shots"][0])
+        return scene.validate_model_output(data, lines, cast, CAT["templates"], CAT["angles"])
+
+    assert problems(lambda s: None) == []
+    assert problems(lambda s: (s.pop("gaze"), s.pop("actions"), s.pop("props"))) == []      # all optional
+    assert any("gaze" in p for p in problems(lambda s: s.update(gaze={"A": "ceiling"})))
+    assert any("actions" in p for p in problems(lambda s: s.update(actions={"A": "dance"})))
+    assert any("gaze" in p for p in problems(lambda s: s.update(gaze={"C": "door"})))
+    assert any("actions" in p for p in problems(lambda s: s.update(actions="stand")))
+    assert any("props" in p for p in problems(lambda s: s.update(props="door")))
+
+
+def test_prompt_lists_every_gaze_and_action_id_the_drawing_understands():
+    for key in list(scene.GAZE_TARGETS) + list(scene.ACTIONS):
+        assert key in model_adapter.FORMAT_NOTES, key
+    assert '"gaze"' in model_adapter.FORMAT_NOTES and '"actions"' in model_adapter.FORMAT_NOTES
+
+
+def test_fallback_card_still_contains_panel_diagrams_and_text():
+    lines = sample_lines()
+    html_text = "".join(render_cards(lines))
+    assert html_text.count("data:image/svg+xml;base64,") >= 9      # panel + height + plan view for each of 3 shots
+    assert "동작과 시선" in html_text and "<script" not in html_text
+
+
+def test_app_uses_the_component_and_keeps_the_plain_fallback():
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert "components.html(" in source and "sketch.rough_source()" in source and "cards.shot_card(" in source
+    py_compile.compile(str(ROOT / "app.py"), doraise=True)
 
 
 if __name__ == "__main__":
