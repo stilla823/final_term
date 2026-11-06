@@ -1,0 +1,68 @@
+{
+  "_about": "Sample scene and saved demo result written by hand for the Between the Lines project (CC BY 4.0). It is not generated at run time.",
+  "sample": {
+    "cast_count": 2,
+    "location": "indoor",
+    "intention": "B는 같이 가고 싶지만 붙잡지 못한다.",
+    "dialogue": "A: 너도 같이 갈래?\nB: 괜찮아. 먼저 가."
+  },
+  "result": {
+    "assumptions": ["장소는 실내이며, 문이 있는 복도로 가정했다.", "A는 문을 통해 떠난다."],
+    "shots": [
+      {
+        "template_id": "medium_two_shot",
+        "angle_id": "eye_level",
+        "angle_focus": null,
+        "roles": {"B": "left", "A": "right"},
+        "props": ["door"],
+        "gaze": {"A": "partner", "B": "door"},
+        "actions": {"A": "hold_door", "B": "stand"},
+        "dialogue_line_ids": ["L1"],
+        "camera_position": "복도 안쪽에서 두 인물을 옆에서 바라본다. 카메라는 두 사람의 눈높이에 있다.",
+        "placement_and_action": "A는 오른쪽에서 문을 반쯤 열고 서서 첫 대사를 한다. B는 왼쪽에 서 있다가 대답하기 전에 문 쪽을 바라본다.",
+        "acting_note": "A는 질문을 던진 뒤에도 문을 잡은 손을 놓지 않고 B의 대답을 기다린다.",
+        "reason": "두 사람을 같은 눈높이에 두어 아직은 대등한 관계로 보여 준다. B가 문 쪽을 바라보는 시선이 다음 샷의 불안을 준비한다."
+      },
+      {
+        "template_id": "ots_close_up",
+        "angle_id": "high",
+        "angle_focus": "B",
+        "roles": {"B": "subject", "A": "foreground"},
+        "props": [],
+        "gaze": {"B": "away"},
+        "actions": {"B": "head_down"},
+        "dialogue_line_ids": ["L2"],
+        "camera_position": "A의 어깨 바로 뒤에서, B의 눈높이보다 조금 높은 위치에서 B를 내려다본다.",
+        "placement_and_action": "B의 얼굴과 어깨가 화면 대부분을 차지하고, A의 어깨가 왼쪽 앞쪽에 걸쳐 있다. B는 두 문장을 이어서 말한다.",
+        "acting_note": "“괜찮아.” 뒤에서 잠깐 멈추고, “먼저 가.”를 말할 때 고개를 살짝 숙이며 A에게서 시선을 돌린다.",
+        "reason": "살짝 내려다보면 B가 작고 불안해 보인다. 같이 가고 싶지만 붙잡지 못하는 마음이 표정과 함께 드러나고, A의 어깨가 둘 사이의 거리를 보여 준다."
+      },
+      {
+        "template_id": "wide_empty_space",
+        "angle_id": "high",
+        "angle_focus": "B",
+        "roles": {"B": "figure", "A": "absent"},
+        "props": [],
+        "gaze": {"B": "partner"},
+        "actions": {"B": "stand"},
+        "dialogue_line_ids": [],
+        "camera_position": "복도 저 멀리, 천장 가까운 높은 위치에서 아래로 내려다본다.",
+        "placement_and_action": "A는 이미 떠났다. B는 화면 왼쪽에 서 있고, A가 서 있던 오른쪽 자리는 비어 있고, B는 그 빈 자리를 바라본다.",
+        "acting_note": "B는 문이 닫힌 뒤에도 몇 초 동안 움직이지 않다가, 마지막에 숨을 한 번 내쉰다.",
+        "reason": "높은 위치에서 보면 B가 작아 보이고 빈 자리가 더 크게 느껴진다. 대사 없이도 붙잡지 못한 마음이 남는다."
+      }
+    ],
+    "suggestions": {
+      "before": {
+        "kind": "action",
+        "text": "A가 먼저 가려고 몇 걸음 걷다가 멈추고, B 쪽으로 돌아선 뒤 질문한다.",
+        "effect": "A가 일부러 돌아와서 묻는 것이 되어, B의 거절이 더 아프게 보인다."
+      },
+      "after": {
+        "kind": "dialogue",
+        "text": "B가 조용히 말한다. “같이 가고 싶었는데.”",
+        "effect": "B의 감정이 말로 직접 드러난다. 마지막 샷을 무음으로 두면 관객이 빈 프레임과 B의 반응에서 감정을 스스로 읽어 낼 수 있다."
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "_about": "Composition templates created for the Between the Lines project (CC BY 4.0). A template says what is in the frame; the camera angle is chosen separately.",
+  "templates": [
+    {
+      "id": "medium_two_shot",
+      "shot_size": "medium two-shot",
+      "shot_size_ko": "미디엄 투샷",
+      "roles": ["left", "right"],
+      "required_roles": ["left", "right"],
+      "effect_ko": "두 인물의 관계와 거리를 한 화면에 보여 준다. 대화의 균형이 잘 드러난다."
+    },
+    {
+      "id": "ots_close_up",
+      "shot_size": "over-the-shoulder close-up",
+      "shot_size_ko": "클로즈업 (오버 더 숄더)",
+      "roles": ["subject", "foreground"],
+      "required_roles": ["subject", "foreground"],
+      "effect_ko": "한 인물의 표정을 가까이 보여 주고, 앞쪽 어깨로 상대와의 거리를 느끼게 한다."
+    },
+    {
+      "id": "wide_empty_space",
+      "shot_size": "wide shot with empty space",
+      "shot_size_ko": "와이드 샷",
+      "roles": ["figure", "absent"],
+      "required_roles": ["figure"],
+      "effect_ko": "인물을 작게 두고 빈 공간을 남겨 고립감이나 상실감을 만든다."
+    },
+    {
+      "id": "single_medium",
+      "shot_size": "single-character medium shot",
+      "shot_size_ko": "미디엄 샷 (한 명)",
+      "roles": ["figure"],
+      "required_roles": ["figure"],
+      "effect_ko": "한 인물의 몸짓과 표정을 함께 보여 준다."
+    }
+  ]
+}
